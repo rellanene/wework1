@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Register{% endblock %}
+{% block content %}
+<div class="card auth-card">
+    <h2>Create Account</h2>
+    <form method="post">
+        <label>Account Type</label>
+        <select name="user_type" id="user_type" onchange="toggleFields()">
+            <option value="end_user">End User (Business Owner)</option>
+            <option value="staff">Staff</option>
+        </select>
+
+        <div id="business_name_field">
+            <label>Business Name</label>
+            <input type="text" name="business_name">
+        </div>
+
+        <div id="business_select_field" style="display:none;">
+            <label>Select Business</label>
+            <select name="business_id">
+                {% for b in businesses %}
+                    <option value="{{ b.id }}">{{ b.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <label>Full Name</label>
+        <input type="text" name="name" required>
+
+        <label>Email</label>
+        <input type="email" name="email" required>
+
+        <label>Password</label>
+        <input type="password" name="password" required>
+
+        <button type="submit" class="btn-primary">Register</button>
+    </form>
+    <p class="muted">Already have an account? <a href="{{ url_for('login') }}">Login</a></p>
+</div>
+
+<script>
+function toggleFields() {
+    let type = document.getElementById("user_type").value;
+    document.getElementById("business_name_field").style.display =
+        type === "end_user" ? "block" : "none";
+    document.getElementById("business_select_field").style.display =
+        type === "staff" ? "block" : "none";
+}
+window.onload = toggleFields;
+</script>
+{% endblock %}

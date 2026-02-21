@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h1 class="page-title">Dashboard</h1>
+<div class="grid-3">
+    <div class="card stat-card">
+        <h3>Total Products</h3>
+        <p class="stat-value">{{ total_products }}</p>
+    </div>
+    <div class="card stat-card">
+        <h3>Total Customers</h3>
+        <p class="stat-value">{{ total_customers }}</p>
+    </div>
+    <div class="card stat-card">
+        <h3>Total Sales</h3>
+        <p class="stat-value">R {{ "%.2f"|format(total_sales) }}</p>
+    </div>
+</div>
+{% endblock %}

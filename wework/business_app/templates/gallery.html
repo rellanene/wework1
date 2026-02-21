@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Gallery{% endblock %}
+{% block content %}
+<h1 class="page-title">Gallery</h1>
+
+<div class="card">
+    <h3>Upload Image</h3>
+    <form method="post" enctype="multipart/form-data">
+        <input type="file" name="file" required>
+        <button type="submit" class="btn-primary">Upload</button>
+    </form>
+</div>
+
+<div class="grid-4 gallery-grid">
+    {% for img in images %}
+    <div class="card gallery-card">
+        <img src="{{ url_for('static', filename='../uploads/' ~ img.filename) }}" alt="Image">
+        <p class="muted">{{ img.created_at }}</p>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

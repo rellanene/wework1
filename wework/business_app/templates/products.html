@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Products{% endblock %}
+{% block content %}
+<h1 class="page-title">Products</h1>
+
+<div class="card">
+    <h3>Add Product</h3>
+    <form method="post">
+        <label>Name</label>
+        <input type="text" name="name" required>
+
+        <label>Price</label>
+        <input type="number" step="0.01" name="price" required>
+
+        <button type="submit" class="btn-primary">Save</button>
+    </form>
+</div>
+
+<div class="card">
+    <h3>Product List</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>#</th><th>Name</th><th>Price</th><th>Created</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in items %}
+            <tr>
+                <td>{{ p.id }}</td>
+                <td>{{ p.name }}</td>
+                <td>R {{ "%.2f"|format(p.price) }}</td>
+                <td>{{ p.created_at }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

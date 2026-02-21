@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Customers{% endblock %}
+{% block content %}
+<h1 class="page-title">Customers</h1>
+
+<div class="card">
+    <h3>Add Customer</h3>
+    <form method="post">
+        <label>Name</label>
+        <input type="text" name="name" required>
+
+        <label>Email</label>
+        <input type="email" name="email">
+
+        <label>Phone</label>
+        <input type="text" name="phone">
+
+        <button type="submit" class="btn-primary">Save</button>
+    </form>
+</div>
+
+<div class="card">
+    <h3>Customer List</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>#</th><th>Name</th><th>Email</th><th>Phone</th><th>Created</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in customers %}
+            <tr>
+                <td>{{ c.id }}</td>
+                <td>{{ c.name }}</td>
+                <td>{{ c.email }}</td>
+                <td>{{ c.phone }}</td>
+                <td>{{ c.created_at }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
