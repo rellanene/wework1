@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Stock Movements{% endblock %}
+{% block content %}
+
+<h1 class="page-title">Stock Movements</h1>
+
+<div class="card">
+    <h3>Filter Movements</h3>
+
+    <form method="get" class="filter-form">
+
+        <div class="filter-row">
+
+            <!-- Calendar Date -->
+            <div class="filter-item">
+                <label>Select Date</label>
+                <input type="date" name="date">
+            </div>
+
+            <!-- Manual Date -->
+            <div class="filter-item">
+                <label>Type Date (YYYY-MM-DD)</label>
+                <input type="text" name="typed_date" placeholder="2025-01-15">
+            </div>
+
+            <!-- Product Name -->
+            <div class="filter-item">
+                <label>Product</label>
+                <select name="product_name">
+                    <option value="">All Products</option>
+                    {% for p in products %}
+                        <option value="{{ p.name }}">{{ p.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="filter-item">
+                <button class="btn-primary" type="submit">Apply Filters</button>
+            </div>
+
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h3>Movement History</h3>
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Product</th>
+                <th>Movement</th>
+                <th>Qty</th>
+                <th>From</th>
+                <th>To</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for m in movements %}
+            <tr>
+                <td>{{ m.created_at }}</td>
+                <td>{{ m.product_name }}</td>
+                <td>{{ m.movement_type }}</td>
+                <td>{{ m.quantity }}</td>
+                <td>{{ m.from_store_name or "-" }}</td>
+                <td>{{ m.to_store_name or "-" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<style>
+.filter-form {
+    margin-bottom: 20px;
+}
+.filter-row {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+.filter-item {
+    display: flex;
+    flex-direction: column;
+}
+.filter-item input,
+.filter-item select {
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+}
+</style>
+
+{% endblock %}

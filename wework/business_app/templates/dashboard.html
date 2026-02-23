@@ -2,6 +2,9 @@
 {% block title %}Dashboard{% endblock %}
 {% block content %}
 <h1 class="page-title">Dashboard</h1>
+
+{% if user.role == 'owner' %}
+<p class="muted">Owner view – full business overview.</p>
 <div class="grid-3">
     <div class="card stat-card">
         <h3>Total Products</h3>
@@ -16,4 +19,61 @@
         <p class="stat-value">R {{ "%.2f"|format(total_sales) }}</p>
     </div>
 </div>
+
+<div class="card">
+    <h3>Sales – Last 7 Days</h3>
+    <canvas id="salesChart" height="80"></canvas>
+</div>
+
+{% else %}
+<p class="muted">Staff view – quick snapshot.</p>
+<div class="grid-3">
+    <div class="card stat-card">
+        <h3>Total Customers</h3>
+        <p class="stat-value">{{ total_customers }}</p>
+    </div>
+    <div class="card stat-card">
+        <h3>Total Products</h3>
+        <p class="stat-value">{{ total_products }}</p>
+    </div>
+</div>
+{% endif %}
+
+<script>
+const labels = {{ chart_labels|tojson }};
+const dataValues = {{ chart_values|tojson }};
+
+const ctx = document.getElementById('salesChart');
+if (ctx) {
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Sales (R)',
+                data: dataValues,
+                borderColor: '#D4AF37',
+                backgroundColor: 'rgba(212,175,55,0.15)',
+                tension: 0.3,
+                fill: true,
+                pointRadius: 3,
+                pointBackgroundColor: '#D4AF37'
+            }]
+        },
+        options: {
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                x: {
+                    ticks: { color: '#777777' }
+                },
+                y: {
+                    ticks: { color: '#777777' }
+                }
+            }
+        }
+    });
+}
+</script>
 {% endblock %}

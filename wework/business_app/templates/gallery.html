@@ -14,7 +14,7 @@
 <div class="grid-4 gallery-grid">
     {% for img in images %}
     <div class="card gallery-card">
-        <img src="{{ url_for('static', filename='../uploads/' ~ img.filename) }}" alt="Image">
+		<img src="{{ url_for('uploaded_file', filename=img.filename) }}" alt="Image">
         <p class="muted">{{ img.created_at }}</p>
     </div>
     {% endfor %}

@@ -4,22 +4,32 @@
     <meta charset="UTF-8">
     <title>{% block title %}Business App{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-main">
     <header class="top-nav">
         <div class="logo">LuxBiz</div>
+
         {% if session.get('user') %}
-        <nav>
-            <a href="{{ url_for('dashboard') }}">Dashboard</a>
-            <a href="{{ url_for('products') }}">Products</a>
-            <a href="{{ url_for('customers') }}">Customers</a>
-            <a href="{{ url_for('sales') }}">Sales</a>
-            <a href="{{ url_for('gallery') }}">Gallery</a>
-            <a href="{{ url_for('settings') }}">Settings</a>
-            <a href="{{ url_for('profile') }}">Profile</a>
-            <a href="{{ url_for('logout') }}">Logout</a>
-        </nav>
+            <div class="muted" style="margin-left:16px;">
+                {{ session.user.name }} ({{ session.user.role|capitalize }})
+            </div>
         {% endif %}
+
+		<nav>
+		    <a href="{{ url_for('dashboard') }}">Dashboard</a>
+		    <a href="{{ url_for('products') }}">Products</a>
+		    <a href="{{ url_for('customers') }}">Customers</a>
+		    <a href="{{ url_for('sales') }}">Sales</a>
+		    <a href="{{ url_for('stores') }}">Stores</a>
+		    <a href="{{ url_for('stock_in') }}">Stock In</a>
+		    <a href="{{ url_for('stock_transfer') }}">Transfer</a>
+		    <a href="{{ url_for('stock_movements') }}">Movements</a>
+		    <a href="{{ url_for('gallery') }}">Gallery</a>
+		    <a href="{{ url_for('settings') }}">Settings</a>
+		    <a href="{{ url_for('profile') }}">Profile</a>
+		    <a href="{{ url_for('logout') }}">Logout</a>
+		</nav>
     </header>
 
     <main class="main-container">

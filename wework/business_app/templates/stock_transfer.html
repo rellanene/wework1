@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Stock Transfer{% endblock %}
+{% block content %}
+<h1 class="page-title">Transfer Stock Between Stores</h1>
+
+<div class="card">
+    <form method="post">
+        <label>Product</label>
+        <select name="product_id" required>
+            {% for p in products %}
+            <option value="{{ p.id }}">{{ p.name }}</option>
+            {% endfor %}
+        </select>
+
+        <label>From Store</label>
+        <select name="from_store" required>
+            {% for s in stores %}
+            <option value="{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+        </select>
+
+        <label>To Store</label>
+        <select name="to_store" required>
+            {% for s in stores %}
+            <option value="{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+        </select>
+
+        <label>Quantity</label>
+        <input type="number" name="quantity" min="1" required>
+
+        <button type="submit" class="btn-primary">Transfer</button>
+    </form>
+</div>
+{% endblock %}

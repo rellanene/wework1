@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Stores{% endblock %}
+{% block content %}
+<h1 class="page-title">Stores / Storage Locations</h1>
+
+<div class="card">
+    <h3>Add New Store</h3>
+    <form method="post">
+        <label>Store Name</label>
+        <input type="text" name="name" required>
+        <button type="submit" class="btn-primary">Save</button>
+    </form>
+</div>
+
+<div class="card">
+    <h3>Existing Stores</h3>
+
+    <div class="accordion">
+        {% for s in stores %}
+        <div class="accordion-item">
+            <button class="accordion-header" onclick="toggleStore({{ s.id }})">
+                {{ s.name }}
+            </button>
+
+            <div class="accordion-body" id="store-{{ s.id }}" style="display:none;">
+                <p class="muted">Loading products...</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+function toggleStore(storeId) {
+    const body = document.getElementById("store-" + storeId);
+
+    if (body.style.display === "block") {
+        body.style.display = "none";
+        return;
+    }
+
+    body.style.display = "block";
+    body.innerHTML = "<p class='muted'>Loading products...</p>";
+
+    fetch(`/store/${storeId}/products`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.products.length === 0) {
+                body.innerHTML = "<p class='muted'>No products in this store.</p>";
+                return;
+            }
+
+            let html = `
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Qty</th>
+                            <th>Price</th>
+                            <th>Total Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            data.products.forEach(p => {
+                const total = (p.price * p.quantity).toFixed(2);
+                html += `
+                    <tr>
+                        <td>${p.name}</td>
+                        <td>${p.quantity}</td>
+                        <td>R ${p.price.toFixed(2)}</td>
+                        <td>R ${total}</td>
+                    </tr>
+                `;
+            });
+
+            html += "</tbody></table>";
+            body.innerHTML = html;
+        });
+}
+</script>
+
+<style>
+.accordion-header {
+    width: 100%;
+    text-align: left;
+    padding: 12px;
+    background: var(--lux-black);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.accordion-body {
+    background: var(--bg-alt);
+    padding: 12px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+}
+</style>
+
+{% endblock %}

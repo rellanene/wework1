@@ -21,7 +21,7 @@
     <table class="table">
         <thead>
             <tr>
-                <th>#</th><th>Name</th><th>Price</th><th>Created</th>
+                <th>#</th><th>Name</th><th>Price</th><th>Total Qty</th><th>Created</th>
             </tr>
         </thead>
         <tbody>
@@ -30,6 +30,7 @@
                 <td>{{ p.id }}</td>
                 <td>{{ p.name }}</td>
                 <td>R {{ "%.2f"|format(p.price) }}</td>
+                <td>{{ p.total_quantity }}</td>
                 <td>{{ p.created_at }}</td>
             </tr>
             {% endfor %}
