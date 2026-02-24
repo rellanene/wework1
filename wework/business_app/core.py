@@ -303,16 +303,18 @@ def create_app():
         if request.method == "POST":
             name = request.form["name"]
             price = request.form["price"]
+            wholesale_price = request.form["wholesale_price"]
+
             cursor.execute("""
-                INSERT INTO products (business_id, name, price)
-                VALUES (%s, %s, %s)
-            """, (business_id, name, price))
+                INSERT INTO products (business_id, name, price, wholesale_price)
+                VALUES (%s, %s, %s, %s)
+            """, (business_id, name, price, wholesale_price))
             db.commit()
             return redirect(url_for("products"))
 
         cursor.execute("""
             SELECT p.*,
-                   IFNULL(SUM(i.quantity),0) AS total_quantity
+           IFNULL(SUM(i.quantity),0) AS total_quantity
             FROM products p
             LEFT JOIN inventory i ON p.id = i.product_id
             WHERE p.business_id=%s
@@ -591,6 +593,132 @@ def create_app():
         cursor.execute("SELECT * FROM gallery WHERE business_id=%s ORDER BY created_at DESC", (business_id,))
         images = cursor.fetchall()
         return render_template("gallery.html", images=images)
+    
+    # -------------------------
+    # FINANCES PAGE
+    # -------------------------
+    @app.route("/finances")
+    @login_required
+    def finances():
+        business_id = session["user"]["business_id"]
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+
+    # -------------------------
+    # SALES CALCULATIONS
+    # -------------------------
+        cursor.execute("""
+            SELECT IFNULL(SUM(total_amount),0) AS total_sales,
+                   COUNT(*) AS total_units,
+                   IFNULL(AVG(total_amount),0) AS avg_sale_value
+            FROM sales
+            WHERE business_id=%s
+        """, (business_id,))
+        sales_stats = cursor.fetchone()
+
+        # -------------------------
+        # PROFIT MARGINS
+        # -------------------------
+        cursor.execute("""
+            SELECT id, name, price, wholesale_price
+            FROM products
+            WHERE business_id=%s
+        """, (business_id,))
+        rows = cursor.fetchall()
+        
+        margins = []
+        for r in rows:
+            price = r["price"] or 0
+            wholesale = r["wholesale_price"] or 0
+        
+            margin_value = price - wholesale
+            margin_percent = (margin_value / wholesale * 100) if wholesale else 0
+        
+            margins.append({
+                "name": r["name"],
+                "price": price,
+                "wholesale_price": wholesale,
+                "margin_value": margin_value,
+                "margin_percent": margin_percent
+            })
+
+    # -------------------------
+    # STOCK VALUATION
+    # -------------------------
+        cursor.execute("""
+            SELECT p.id, p.name, p.price, p.wholesale_price,
+                   IFNULL(SUM(i.quantity),0) AS total_quantity
+            FROM products p
+            LEFT JOIN inventory i ON p.id = i.product_id
+            WHERE p.business_id=%s
+            GROUP BY p.id
+        """, (business_id,))
+        stock_rows = cursor.fetchall()
+    
+        stock_value = []
+        total_wholesale_value = 0
+        total_retail_value = 0
+    
+        for row in stock_rows:
+            wholesale_price = row["wholesale_price"] or 0
+            price = row["price"] or 0
+            qty = row["total_quantity"] or 0
+
+            wholesale_total = qty * wholesale_price
+            retail_total = qty * price
+    
+            total_wholesale_value += wholesale_total
+            total_retail_value += retail_total
+    
+            stock_value.append({
+                "name": row["name"],
+                "total_quantity": row["total_quantity"],
+                "wholesale_total": wholesale_total,
+                "retail_total": retail_total
+            })
+
+    # -------------------------
+    # PRODUCTS FOR SUPPLIER ORDERING
+    # -------------------------
+        cursor.execute("SELECT id, name FROM products WHERE business_id=%s", (business_id,))
+        products = cursor.fetchall()
+    
+        finances_data = {
+            "total_sales": sales_stats["total_sales"],
+            "total_units": sales_stats["total_units"],
+            "avg_sale_value": sales_stats["avg_sale_value"],
+            "margins": margins,
+            "stock_value": stock_value,
+            "total_wholesale_value": total_wholesale_value,
+            "total_retail_value": total_retail_value,
+            "products": products
+        }
+    
+        return render_template("finances.html", finances=finances_data)
+
+
+    # -------------------------
+    # SUPPLIER ORDER SUBMISSION
+    # -------------------------
+    @app.route("/supplier-order", methods=["POST"])
+    @login_required
+    def supplier_order():
+        business_id = session["user"]["business_id"]
+        product_id = request.form["product_id"]
+        quantity = request.form["quantity"]
+        supplier = request.form["supplier"]
+    
+        db = get_db()
+        cursor = db.cursor()
+    
+        cursor.execute("""
+            INSERT INTO supplier_orders (business_id, product_id, quantity, supplier)
+            VALUES (%s, %s, %s, %s)
+        """, (business_id, product_id, quantity, supplier))
+        db.commit()
+    
+        flash("Supplier order placed successfully!", "success")
+        return redirect(url_for("finances"))
 
     # -------------------------
     # UPLOADS (Serve files)

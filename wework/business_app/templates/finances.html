@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Finances{% endblock %}
+
+{% block content %}
+<h1 class="page-title">Finances Dashboard</h1>
+
+<!-- ========================= -->
+<!-- SALES CALCULATIONS -->
+<!-- ========================= -->
+<div class="card">
+    <h3>Sales Calculations</h3>
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Total Sales</th>
+                <th>Total Units Sold</th>
+                <th>Average Sale Value</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>R {{ "%.2f"|format(finances.total_sales) }}</td>
+                <td>{{ finances.total_units }}</td>
+                <td>R {{ "%.2f"|format(finances.avg_sale_value) }}</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- ========================= -->
+<!-- PROFIT MARGIN REPORTS -->
+<!-- ========================= -->
+<div class="card">
+    <h3>Profit Margin Reports</h3>
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Product</th>
+                <th>Retail Price</th>
+                <th>Wholesale Price</th>
+                <th>Margin (R)</th>
+                <th>Margin (%)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in finances.margins %}
+            <tr>
+                <td>{{ p.name }}</td>
+                <td>R {{ "%.2f"|format(p.price) }}</td>
+                <td>R {{ "%.2f"|format(p.wholesale_price) }}</td>
+                <td>R {{ "%.2f"|format(p.margin_value) }}</td>
+                <td>{{ "%.1f"|format(p.margin_percent) }}%</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- ========================= -->
+<!-- STOCK VALUATION -->
+<!-- ========================= -->
+<div class="card">
+    <h3>Stock Valuation</h3>
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Product</th>
+                <th>Total Qty</th>
+                <th>Wholesale Value</th>
+                <th>Retail Value</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in finances.stock_value %}
+            <tr>
+                <td>{{ s.name }}</td>
+                <td>{{ s.total_quantity }}</td>
+                <td>R {{ "%.2f"|format(s.wholesale_total) }}</td>
+                <td>R {{ "%.2f"|format(s.retail_total) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="summary-box">
+        <strong>Total Stock Wholesale Value:</strong>
+        R {{ "%.2f"|format(finances.total_wholesale_value) }}<br>
+
+        <strong>Total Stock Retail Value:</strong>
+        R {{ "%.2f"|format(finances.total_retail_value) }}
+    </div>
+</div>
+
+<!-- ========================= -->
+<!-- SUPPLIER ORDERING -->
+<!-- ========================= -->
+<div class="card">
+    <h3>Supplier Ordering</h3>
+
+    <form method="post" action="/supplier-order">
+        <label>Select Product</label>
+        <select name="product_id" required>
+            {% for p in finances.products %}
+            <option value="{{ p.id }}">{{ p.name }}</option>
+            {% endfor %}
+        </select>
+
+        <label>Quantity to Order</label>
+        <input type="number" name="quantity" min="1" required>
+
+        <label>Supplier Name</label>
+        <input type="text" name="supplier" required>
+
+        <button class="btn-primary" type="submit">Place Order</button>
+    </form>
+</div>
+
+{% endblock %}
