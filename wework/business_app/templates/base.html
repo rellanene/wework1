@@ -8,7 +8,7 @@
 </head>
 <body class="bg-main">
     <header class="top-nav">
-        <div class="logo">LuxBiz</div>
+        <div class="logo">RELLA DISTRIBUTION</div>
 
         {% if session.get('user') %}
             <div class="muted" style="margin-left:16px;">
@@ -21,7 +21,7 @@
 		    <a href="{{ url_for('products') }}">Products</a>
 		    <a href="{{ url_for('customers') }}">Customers</a>
 		    <a href="{{ url_for('sales') }}">Sales</a>
-			<li><a href="{{ url_for('finances') }}">Finances</a></li>
+			<a href="{{ url_for('finances') }}">Finances</a>
 		    <a href="{{ url_for('stores') }}">Stores</a>
 		    <a href="{{ url_for('stock_in') }}">Stock In</a>
 		    <a href="{{ url_for('stock_transfer') }}">Transfer</a>
