@@ -1,51 +1,111 @@
 {% extends "base.html" %}
-{% block title %}Products{% endblock %}
+
+{% block title %}Add Product{% endblock %}
+
 {% block content %}
-<h1 class="page-title">Products</h1>
+
+<h1 class="page-title">Add Product</h1>
 
 <div class="card">
-    <h3>Add Product</h3>
-    <form method="post">
-        <label>Name</label>
+
+    <h3 style="margin-bottom: 15px;">Product Information</h3>
+
+    <!-- Scan Buttons -->
+    <button type="button" id="startBtn" class="btn-primary" onclick="startScan()">Start Scanning</button>
+    <button type="button" id="stopBtn" class="btn-primary" style="background:#444; margin-left:10px; opacity:0.4; pointer-events:none;" onclick="stopScan()">Stop Scanning</button>
+
+    <!-- Live Camera Preview -->
+    <div id="scanner" style="display:none; margin-top:10px; border:1px solid #333; padding:10px; border-radius:10px;">
+        <p style="margin-bottom:8px; color:var(--lux-gold); font-weight:bold;">Camera Preview</p>
+        <video id="preview" style="width:100%; border-radius:10px;"></video>
+    </div>
+
+    <form method="POST" style="margin-top: 25px;">
+
+        <!-- Barcode Input (INSIDE FORM NOW) -->
+        <label>Barcode</label>
+        <input type="text" id="barcode" name="barcode" placeholder="Scan or enter barcode">
+
+        <label>Product Name</label>
         <input type="text" name="name" required>
 
-        <label>Price</label>
-        <input type="number" step="0.01" name="price" required>
+        <label>Wholesale Price</label>
+        <input type="number" name="wholesale_price" step="0.01" required>
 
-        <div class="form-group">
-            <label>Wholesale Price</label>
-            <input type="number" step="0.01" name="wholesale_price" required>
-        </div>
+        <label>Retail Price</label>
+        <input type="number" name="price" step="0.01" required>
 
-        <button type="submit" class="btn-primary">Save</button>
-    </form>
-</div>
-
-<div class="card">
-    <h3>Product List</h3>
-    <table class="table">
-        <thead>
-            <tr>
-                <th>#</th>
-                <th>Name</th>
-                <th>Retail Price</th>
-                <th>Wholesale Price</th>
-                <th>Total Qty</th>
-                <th>Created</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for p in items %}
-            <tr>
-                <td>{{ p.id }}</td>
-                <td>{{ p.name }}</td>
-                <td>R {{ "%.2f"|format(p.price) }}</td>
-                <td>R {{ "%.2f"|format(p.wholesale_price) }}</td>
-                <td>{{ p.total_quantity }}</td>
-                <td>{{ p.created_at }}</td>
-            </tr>
+        <label>Category</label>
+        <select name="category_id">
+            {% for c in categories %}
+                <option value="{{ c.id }}">{{ c.name }}</option>
             {% endfor %}
-        </tbody>
-    </table>
+        </select>
+
+        <button class="btn-primary" style="margin-top: 20px;">Save Product</button>
+    </form>
+
 </div>
+
+<!-- QuaggaJS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+
+<script>
+let lastScan = 0;
+let scanning = false;
+
+function enableStopButton() {
+    const stopBtn = document.getElementById("stopBtn");
+    stopBtn.style.opacity = "1";
+    stopBtn.style.pointerEvents = "auto";
+}
+
+function startScan() {
+    if (scanning) return;
+    scanning = true;
+
+    document.getElementById("scanner").style.display = "block";
+
+    Quagga.init({
+        inputStream: {
+            name: "Live",
+            type: "LiveStream",
+            target: document.querySelector('#preview'),
+        },
+        decoder: {
+            readers: ["ean_reader", "ean_8_reader", "code_128_reader"]
+        }
+    }, function(err) {
+        if (err) {
+            console.log(err);
+            return;
+        }
+        Quagga.start();
+    });
+
+    Quagga.onDetected(function(result) {
+        let now = Date.now();
+
+        if (now - lastScan < 1000) return;
+        lastScan = now;
+
+        enableStopButton();
+
+        let code = result.codeResult.code;
+        document.getElementById("barcode").value = code;
+    });
+}
+
+function stopScan() {
+    scanning = false;
+    Quagga.stop();
+    document.getElementById("scanner").style.display = "none";
+}
+
+// USB Scanner Support
+document.getElementById("barcode").addEventListener("change", function() {
+    enableStopButton();
+});
+</script>
+
 {% endblock %}

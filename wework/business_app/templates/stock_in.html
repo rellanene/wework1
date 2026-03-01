@@ -1,28 +1,196 @@
 {% extends "base.html" %}
+
 {% block title %}Stock In{% endblock %}
+
 {% block content %}
-<h1 class="page-title">Stock In (Receive New Stock)</h1>
+
+<h1 class="page-title">Stock In</h1>
 
 <div class="card">
-    <form method="post">
+
+    <h3 style="margin-bottom: 15px;">Scan or Add Stock</h3>
+
+    <!-- Scan Buttons -->
+    <button type="button" id="startBtn" class="btn-primary" onclick="startScan()">Start Scanning</button>
+    <button type="button" id="stopBtn" class="btn-primary" style="background:#444; margin-left:10px; opacity:0.4; pointer-events:none;" onclick="stopScan()">Stop Scanning</button>
+
+    <!-- USB Scanner Input -->
+    <label style="margin-top: 20px;">Scan Barcode (USB Scanner)</label>
+    <input type="text" id="barcode_input" placeholder="Scan barcode here">
+
+    <!-- Live Camera Preview Under Input -->
+    <div id="scanner" style="display:none; margin-top:10px; border:1px solid #333; padding:10px; border-radius:10px;">
+        <p style="margin-bottom:8px; color:var(--lux-gold); font-weight:bold;">Camera Preview</p>
+        <video id="preview" style="width:100%; border-radius:10px;"></video>
+    </div>
+
+    <!-- Stock In Form -->
+    <form method="POST" style="margin-top: 25px;">
+
+        <!-- Product Dropdown -->
         <label>Product</label>
-        <select name="product_id" required>
+        <select id="product_id" name="product_id">
             {% for p in products %}
-            <option value="{{ p.id }}">{{ p.name }}</option>
+                <option value="{{ p.id }}">{{ p.name }}</option>
             {% endfor %}
         </select>
 
+        <p id="product_name" style="margin-top:10px; font-weight:bold; color: var(--lux-gold);"></p>
+
+        <!-- Store -->
         <label>Store</label>
-        <select name="store_id" required>
+        <select name="store_id">
             {% for s in stores %}
-            <option value="{{ s.id }}">{{ s.name }}</option>
+                <option value="{{ s.id }}">{{ s.name }}</option>
             {% endfor %}
         </select>
 
-        <label>Quantity Received</label>
-        <input type="number" name="quantity" min="1" required>
+        <!-- Quantity -->
+        <label>Quantity</label>
+        <input type="number" id="quantity" name="quantity" min="1" value="1" required>
 
-        <button type="submit" class="btn-primary">Add Stock</button>
+        <button class="btn-primary" style="margin-top: 20px;">Add Stock</button>
+    </form>
+
+</div>
+
+<!-- Add New Product Modal -->
+<div id="addProductModal" class="card" style="display:none; margin-top:20px;">
+    <h3>Add New Product</h3>
+
+    <form id="addProductForm">
+        <label>Product Name</label>
+        <input type="text" name="name" required>
+
+        <label>Barcode</label>
+        <input type="text" name="barcode" id="new_product_barcode" readonly>
+
+        <label>Wholesale Price</label>
+        <input type="number" name="wholesale_price" step="0.01" required>
+
+        <label>Retail Price</label>
+        <input type="number" name="price" step="0.01" required>
+
+        <button type="button" class="btn-primary" onclick="saveNewProduct()">Save Product</button>
     </form>
 </div>
+
+<!-- QuaggaJS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+
+<script>
+let lastScan = 0;
+let scanning = false;
+
+function enableStopButton() {
+    const stopBtn = document.getElementById("stopBtn");
+    stopBtn.style.opacity = "1";
+    stopBtn.style.pointerEvents = "auto";
+}
+
+function startScan() {
+    if (scanning) return;
+    scanning = true;
+
+    document.getElementById("scanner").style.display = "block";
+
+    Quagga.init({
+        inputStream: {
+            name: "Live",
+            type: "LiveStream",
+            target: document.querySelector('#preview'),
+        },
+        decoder: {
+            readers: ["ean_reader", "ean_8_reader", "code_128_reader"]
+        }
+    }, function(err) {
+        if (err) {
+            console.log(err);
+            return;
+        }
+        Quagga.start();
+    });
+
+    Quagga.onDetected(function(result) {
+        let now = Date.now();
+
+        if (now - lastScan < 1000) return;
+        lastScan = now;
+
+        enableStopButton();
+
+        let code = result.codeResult.code;
+        fetchProduct(code);
+    });
+}
+
+function stopScan() {
+    scanning = false;
+    
+}
+
+// USB Scanner Support
+document.getElementById("barcode_input").addEventListener("change", function() {
+    let code = this.value.trim();
+    if (code !== "") {
+        enableStopButton();
+        fetchProduct(code);
+    }
+    this.value = "";
+});
+
+// Fetch Product From Backend
+function fetchProduct(barcode) {
+    fetch(`/get_product_by_barcode/${barcode}`)
+        .then(response => response.json())
+        .then(data => {
+
+            if (data.found === true) {
+                document.getElementById("product_id").value = data.id;
+                document.getElementById("product_name").innerText = data.name;
+
+                let qty = document.getElementById("quantity");
+                qty.value = parseInt(qty.value) + 1;
+
+                return;
+            }
+
+            stopScan();
+            document.getElementById("addProductModal").style.display = "block";
+            document.getElementById("new_product_barcode").value = data.barcode;
+        });
+}
+
+// Save New Product
+function saveNewProduct() {
+    const form = document.getElementById("addProductForm");
+    const formData = new FormData(form);
+
+    fetch("/add_product_from_stockin", {
+        method: "POST",
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+
+            document.getElementById("addProductModal").style.display = "none";
+
+            const select = document.getElementById("product_id");
+            const option = document.createElement("option");
+            option.value = data.product_id;
+            option.text = formData.get("name");
+            select.add(option);
+
+            select.value = data.product_id;
+            document.getElementById("product_name").innerText = formData.get("name");
+
+            document.getElementById("quantity").value = 1;
+
+            startScan();
+        }
+    });
+}
+</script>
+
 {% endblock %}

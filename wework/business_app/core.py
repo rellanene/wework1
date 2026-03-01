@@ -3,6 +3,8 @@ import hashlib
 from datetime import date
 from datetime import date, datetime
 from functools import wraps
+from flask import jsonify
+
 
 from flask import (
     Flask, render_template, request, redirect,
@@ -216,6 +218,48 @@ def create_app():
     def logout():
         session.clear()
         return redirect(url_for("login"))
+    
+    #---------------ADD STOCK BARCODE-------------
+    
+    @app.route("/get_product_by_barcode/<barcode>")
+    def get_product_by_barcode(barcode):
+        business_id = session["user"]["business_id"]
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("""
+            SELECT id, name 
+            FROM products 
+            WHERE barcode=%s AND business_id=%s
+        """, (barcode, business_id))
+    
+        product = cursor.fetchone()
+    
+        if product:
+            return jsonify({"found": True, "id": product["id"], "name": product["name"]})
+    
+        return jsonify({"found": False, "barcode": barcode})
+    
+    #--------------SAVE STOCK BARCODE-----------
+    @app.route("/add_product_from_stockin", methods=["POST"])
+    def add_product_from_stockin():
+        business_id = session["user"]["business_id"]
+        db = get_db()
+        cursor = db.cursor()
+    
+        name = request.form["name"]
+        barcode = request.form["barcode"]
+        wholesale = request.form["wholesale_price"]
+        price = request.form["price"]
+    
+        cursor.execute("""
+            INSERT INTO products (business_id, name, barcode, wholesale_price, price)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (business_id, name, barcode, wholesale, price))
+    
+        db.commit()
+    
+        return jsonify({"success": True, "product_id": cursor.lastrowid})
 
     # -------------------------
     # DASHBOARD
