@@ -1,5 +1,7 @@
 import os
 import hashlib
+from datetime import date
+from datetime import date, datetime
 from functools import wraps
 
 from flask import (
@@ -695,6 +697,88 @@ def create_app():
         }
     
         return render_template("finances.html", finances=finances_data)
+    
+    
+    @app.route("/visuals", methods=["GET", "POST"])
+    @login_required
+    def visuals():
+        business_id = session["user"]["business_id"]
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        # Date filters
+        start_date = request.form.get("start_date")
+        end_date = request.form.get("end_date")
+    
+        if not start_date or not end_date:
+            cursor.execute("SELECT DATE_SUB(CURDATE(), INTERVAL 30 DAY) AS d")
+            start_date = cursor.fetchone()["d"]
+            end_date = date.today()
+    
+        # PRODUCTS SUMMARY
+        cursor.execute("""
+            SELECT COUNT(*) AS total_products
+            FROM products
+            WHERE business_id=%s
+        """, (business_id,))
+        products_summary = cursor.fetchone()
+    
+        # SALES SUMMARY + TIME SERIES
+        cursor.execute("""
+            SELECT IFNULL(SUM(total_amount),0) AS total_sales,
+                   IFNULL(COUNT(*),0) AS total_transactions
+            FROM sales
+            WHERE business_id=%s AND DATE(created_at) BETWEEN %s AND %s
+        """, (business_id, start_date, end_date))
+        sales_summary = cursor.fetchone()
+    
+        cursor.execute("""
+            SELECT DATE(created_at) AS day, SUM(total_amount) AS total
+            FROM sales
+            WHERE business_id=%s AND DATE(created_at) BETWEEN %s AND %s
+            GROUP BY DATE(created_at)
+            ORDER BY DATE(created_at)
+        """, (business_id, start_date, end_date))
+        sales_timeseries = cursor.fetchall()
+    
+        # STORES SUMMARY
+        cursor.execute("""
+            SELECT COUNT(*) AS total_stores
+            FROM stores
+            WHERE business_id=%s
+        """, (business_id,))
+        stores_summary = cursor.fetchone()
+    
+        # CUSTOMERS SUMMARY
+        cursor.execute("""
+            SELECT COUNT(*) AS total_customers
+            FROM customers
+            WHERE business_id=%s
+        """, (business_id,))
+        customers_summary = cursor.fetchone()
+    
+        # FINANCES SUMMARY
+        cursor.execute("""
+            SELECT IFNULL(SUM(i.quantity * p.wholesale_price),0) AS wholesale_value,
+                   IFNULL(SUM(i.quantity * p.price),0) AS retail_value
+            FROM inventory i
+            JOIN products p ON p.id = i.product_id
+            WHERE p.business_id=%s
+        """, (business_id,))
+        finances_summary = cursor.fetchone()
+    
+        data = {
+            "products": products_summary,
+            "sales": sales_summary,
+            "stores": stores_summary,
+            "customers": customers_summary,
+            "finances": finances_summary,
+            "sales_timeseries": sales_timeseries,
+            "start_date": start_date,
+            "end_date": end_date
+        }
+    
+        return render_template("visuals.html", data=data)
 
 
     # -------------------------

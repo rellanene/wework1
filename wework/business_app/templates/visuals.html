@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Analytics Dashboard{% endblock %}
+
+{% block content %}
+
+<h1 class="page-title">Analytics Dashboard</h1>
+
+<form method="POST" class="card" style="margin-bottom:20px;">
+    <label>Start Date</label>
+    <input type="date" name="start_date" value="{{ data.start_date }}">
+
+    <label>End Date</label>
+    <input type="date" name="end_date" value="{{ data.end_date }}">
+
+    <button class="btn-primary" style="margin-top:10px;">Apply Filters</button>
+</form>
+
+<div class="grid-3">
+
+    <div class="card stat-card">
+        <h3>Products</h3>
+        <div class="stat-value">{{ data.products.total_products }}</div>
+    </div>
+
+    <div class="card stat-card">
+        <h3>Total Sales</h3>
+        <div class="stat-value">R {{ data.sales.total_sales }}</div>
+        <p class="muted">{{ data.sales.total_transactions }} transactions</p>
+    </div>
+
+    <div class="card stat-card">
+        <h3>Stores</h3>
+        <div class="stat-value">{{ data.stores.total_stores }}</div>
+    </div>
+
+</div>
+
+<div class="grid-3">
+
+    <div class="card stat-card">
+        <h3>Customers</h3>
+        <div class="stat-value">{{ data.customers.total_customers }}</div>
+    </div>
+
+    <div class="card stat-card">
+        <h3>Wholesale Stock Value</h3>
+        <div class="stat-value">R {{ data.finances.wholesale_value }}</div>
+    </div>
+
+    <div class="card stat-card">
+        <h3>Retail Stock Value</h3>
+        <div class="stat-value">R {{ data.finances.retail_value }}</div>
+    </div>
+
+</div>
+
+<div class="card">
+    <h3>Sales Over Time</h3>
+    <canvas id="salesChart"></canvas>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    const labels = [
+        {% for row in data.sales_timeseries %}
+            "{{ row.day }}",
+        {% endfor %}
+    ];
+
+    const values = [
+        {% for row in data.sales_timeseries %}
+            {{ row.total }},
+        {% endfor %}
+    ];
+
+    new Chart(document.getElementById('salesChart'), {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: "Daily Sales",
+                data: values,
+                borderColor: "#D4AF37",
+                backgroundColor: "rgba(212,175,55,0.2)",
+                borderWidth: 2,
+                tension: 0.3
+            }]
+        }
+    });
+</script>
+
+{% endblock %}
