@@ -1,3 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Sales{% endblock %}
+{% block content %}
+
+<!-- AUTO PRICE SCRIPT (unchanged) -->
 <script>
 const productPrices = {
     {% for p in products %}
@@ -5,39 +10,40 @@ const productPrices = {
     {% endfor %}
 };
 
-document.querySelector("select[name='product_id']").addEventListener("change", function() {
-    const price = productPrices[this.value];
-    document.getElementById("price_display").value = "R " + price.toFixed(2);
-    document.getElementById("price_hidden").value = price;
+document.addEventListener("DOMContentLoaded", function () {
+    const productSelect = document.querySelector("select[name='product_id']");
+    const priceDisplay = document.getElementById("price_display");
+    const priceHidden = document.getElementById("price_hidden");
+
+    productSelect.addEventListener("change", function () {
+        const price = productPrices[this.value];
+        priceDisplay.value = "R " + price.toFixed(2);
+        priceHidden.value = price;
+
+        // Reset scan counter when product changes manually
+        scanCount = 0;
+        document.getElementById("quantity").value = 0;
+    });
 });
 </script>
 
-
-
-{% extends "base.html" %}
-{% block title %}Sales{% endblock %}
-{% block content %}
-
+<!-- FILTER CARD (unchanged) -->
 <div class="card">
     <h3>Filter Sales</h3>
 
     <form method="get" class="filter-form">
-
         <div class="filter-row">
 
-            <!-- Calendar Date -->
             <div class="filter-item">
                 <label>Select Date</label>
                 <input type="date" name="date">
             </div>
 
-            <!-- Manual Date -->
             <div class="filter-item">
                 <label>Type Date (YYYY-MM-DD)</label>
                 <input type="text" name="typed_date" placeholder="2025-01-15">
             </div>
 
-            <!-- Product Name -->
             <div class="filter-item">
                 <label>Product</label>
                 <select name="product_name">
@@ -55,17 +61,39 @@ document.querySelector("select[name='product_id']").addEventListener("change", f
         </div>
     </form>
 </div>
+
 <h1 class="page-title">Sales</h1>
 
+<!-- SALES ENTRY CARD -->
 <div class="card">
     <h3>Record Sale</h3>
-    <form method="post">
+
+    <!-- Scan Buttons -->
+    <button type="button" id="startBtn" class="btn-primary" onclick="startScan()">Start Scanning</button>
+    <button type="button" id="stopBtn" class="btn-primary"
+        style="background:#444; margin-left:10px; opacity:0.4; pointer-events:none;"
+        onclick="stopScan()">Stop Scanning</button>
+
+    <!-- USB Scanner Input -->
+    <label style="margin-top: 20px;">Scan Barcode (USB Scanner)</label>
+    <input type="text" id="barcode_input" placeholder="Scan barcode here">
+
+    <!-- Live Camera Preview -->
+    <div id="scanner" style="display:none; margin-top:10px; border:1px solid #333; padding:10px; border-radius:10px;">
+        <p style="margin-bottom:8px; color:var(--lux-gold); font-weight:bold;">Camera Preview</p>
+        <video id="preview" style="width:100%; border-radius:10px;"></video>
+    </div>
+
+    <form method="post" style="margin-top: 25px;">
+
         <label>Product</label>
-        <select name="product_id" required>
+        <select name="product_id" id="product_id" required>
             {% for p in products %}
             <option value="{{ p.id }}">{{ p.name }}</option>
             {% endfor %}
         </select>
+
+        <p id="product_name" style="margin-top:10px; font-weight:bold; color: var(--lux-gold);"></p>
 
         <label>Customer (optional)</label>
         <select name="customer_id">
@@ -83,17 +111,38 @@ document.querySelector("select[name='product_id']").addEventListener("change", f
         </select>
 
         <label>Quantity</label>
-        <input type="number" name="quantity" min="1" required>
+        <input type="number" id="quantity" name="quantity" min="0" value="0" required>
 
-		<label>Price (auto)</label>
-		<input type="text" id="price_display" disabled>
-
-		<input type="hidden" name="price" id="price_hidden">
+        <label>Price (auto)</label>
+        <input type="text" id="price_display" disabled>
+        <input type="hidden" name="price" id="price_hidden">
 
         <button type="submit" class="btn-primary">Record Sale</button>
     </form>
 </div>
 
+<!-- ADD PRODUCT MODAL -->
+<div id="addProductModal" class="card" style="display:none; margin-top:20px;">
+    <h3>Add New Product</h3>
+
+    <form id="addProductForm">
+        <label>Product Name</label>
+        <input type="text" name="name" required>
+
+        <label>Barcode</label>
+        <input type="text" name="barcode" id="new_product_barcode" readonly>
+
+        <label>Wholesale Price</label>
+        <input type="number" name="wholesale_price" step="0.01" required>
+
+        <label>Retail Price</label>
+        <input type="number" name="price" step="0.01" required>
+
+        <button type="button" class="btn-primary" onclick="saveNewProduct()">Save Product</button>
+    </form>
+</div>
+
+<!-- RECENT SALES TABLE (unchanged) -->
 <div class="card">
     <h3>Recent Sales</h3>
     <table class="table">
@@ -114,4 +163,116 @@ document.querySelector("select[name='product_id']").addEventListener("change", f
         </tbody>
     </table>
 </div>
+
+<!-- QUAGGA JS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+
+<script>
+let lastScan = 0;
+let scanning = false;
+let scanCount = 0;  // NEW: count number of scans
+
+function enableStopButton() {
+    const stopBtn = document.getElementById("stopBtn");
+    stopBtn.style.opacity = "1";
+    stopBtn.style.pointerEvents = "auto";
+}
+
+function startScan() {
+    if (scanning) return;
+    scanning = true;
+
+    document.getElementById("scanner").style.display = "block";
+
+    Quagga.init({
+        inputStream: { name: "Live", type: "LiveStream", target: document.querySelector('#preview') },
+        decoder: { readers: ["ean_reader", "ean_8_reader", "code_128_reader"] }
+    }, function(err) {
+        if (err) { console.log(err); return; }
+        Quagga.start();
+    });
+
+    Quagga.onDetected(function(result) {
+        let now = Date.now();
+        if (now - lastScan < 1000) return;
+        lastScan = now;
+
+        enableStopButton();
+        fetchProduct(result.codeResult.code);
+    });
+}
+
+function stopScan() {
+    scanning = false;
+    
+}
+
+document.getElementById("barcode_input").addEventListener("change", function() {
+    let code = this.value.trim();
+    if (code !== "") {
+        enableStopButton();
+        fetchProduct(code);
+    }
+    this.value = "";
+});
+
+function fetchProduct(barcode) {
+    fetch(`/get_product_by_barcode/${barcode}`)
+        .then(r => r.json())
+        .then(data => {
+
+            if (data.found === true) {
+
+                document.getElementById("product_id").value = data.id;
+                document.getElementById("product_name").innerText = data.name;
+
+                if (data.price) {
+                    document.getElementById("price_display").value = "R " + data.price.toFixed(2);
+                    document.getElementById("price_hidden").value = data.price;
+                }
+
+                // NEW: increase scan count
+                scanCount++;
+
+                // NEW: quantity = number of scans
+                document.getElementById("quantity").value = scanCount;
+
+                return;
+            }
+
+            stopScan();
+            document.getElementById("addProductModal").style.display = "block";
+            document.getElementById("new_product_barcode").value = data.barcode;
+        });
+}
+
+function saveNewProduct() {
+    const form = document.getElementById("addProductForm");
+    const formData = new FormData(form);
+
+    fetch("/add_product_from_stockin", { method: "POST", body: formData })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+
+                document.getElementById("addProductModal").style.display = "none";
+
+                const select = document.getElementById("product_id");
+                const option = document.createElement("option");
+                option.value = data.product_id;
+                option.text = formData.get("name");
+                select.add(option);
+
+                select.value = data.product_id;
+                document.getElementById("product_name").innerText = formData.get("name");
+
+                scanCount = 0;
+                document.getElementById("quantity").value = 0;
+
+                startScan();
+            }
+        });
+}
+</script>
+
 {% endblock %}
