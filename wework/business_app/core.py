@@ -4,6 +4,9 @@ from datetime import date
 from datetime import date, datetime
 from functools import wraps
 from flask import jsonify
+import pdfkit
+from flask import send_file
+
 
 
 from flask import (
@@ -612,33 +615,35 @@ def create_app():
         business_id = session["user"]["business_id"]
         db = get_db()
         cursor = db.cursor(dictionary=True)
-
+    
         if request.method == "POST":
             if "file" not in request.files:
                 flash("No file part", "danger")
                 return redirect(request.url)
-
+    
             file = request.files["file"]
             if file.filename == "":
                 flash("No selected file", "danger")
                 return redirect(request.url)
-
+    
             if file and allowed_file(file.filename):
                 filename = secure_filename(file.filename)
                 filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
                 file.save(filepath)
-
+    
                 cursor.execute("""
                     INSERT INTO gallery (business_id, filename)
                     VALUES (%s, %s)
                 """, (business_id, filename))
                 db.commit()
-                flash("Image uploaded", "success")
+                flash("File uploaded", "success")
                 return redirect(url_for("gallery"))
-
+    
+        # Fetch all files for this business
         cursor.execute("SELECT * FROM gallery WHERE business_id=%s ORDER BY created_at DESC", (business_id,))
-        images = cursor.fetchall()
-        return render_template("gallery.html", images=images)
+        files = cursor.fetchall()
+    
+        return render_template("gallery.html", files=files)
     
     # -------------------------
     # FINANCES PAGE
@@ -823,6 +828,131 @@ def create_app():
         }
     
         return render_template("visuals.html", data=data)
+    
+    
+    #-------------invoice--------
+
+
+# Correct wkhtmltopdf configuration (must be an object, not a dict)
+    path_wkhtmltopdf = r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe"
+    config = pdfkit.configuration(wkhtmltopdf=path_wkhtmltopdf)
+
+
+   
+
+
+# ---------- RECORD SALE ROUTE ----------
+    @app.route("/record_sale", methods=["POST"])
+    @login_required
+    def record_sale():
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        try:
+            # -----------------------------
+            # Get form data
+            # -----------------------------
+            business_id = session["user"]["business_id"]
+            product_id = int(request.form.get("product_id"))
+            customer_id = request.form.get("customer_id") or None
+            store_id = int(request.form.get("store_id") or 0)
+            quantity_raw = request.form.get("quantity", "0").strip()
+            price_raw = request.form.get("price", "0").strip()
+            print_mode = request.form.get("print_mode", "no")
+    
+            # Convert to proper types
+            quantity = int(quantity_raw) if quantity_raw.isdigit() else 0
+            price = float(price_raw) if price_raw.replace('.', '', 1).isdigit() else 0.0
+            total_amount = quantity * price
+    
+            # -----------------------------
+            # Insert sale into DB
+            # -----------------------------
+            cursor.execute("""
+                INSERT INTO sales (business_id, product_id, customer_id, store_id, quantity, price, total_amount)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (business_id, product_id, customer_id, store_id, quantity, price, total_amount))
+            db.commit()
+            sale_id = cursor.lastrowid
+            print(">>> Sale inserted:", sale_id)
+    
+            # -----------------------------
+            # Reduce stock
+            # -----------------------------
+            if store_id:
+                reduce_stock_on_sale(product_id, store_id, quantity, business_id)
+    
+            # -----------------------------
+            # Load sale details for invoice
+            # -----------------------------
+            cursor.execute("""
+                SELECT s.*, 
+                       p.name AS product_name,
+                       c.name AS customer_name,
+                       st.name AS store_name
+                FROM sales s
+                LEFT JOIN products p ON s.product_id = p.id
+                LEFT JOIN customers c ON s.customer_id = c.id
+                LEFT JOIN stores st ON s.store_id = st.id
+                WHERE s.id = %s
+            """, (sale_id,))
+            sale = cursor.fetchone()
+    
+            # -----------------------------
+            # Generate invoice HTML & PDF
+            # -----------------------------
+            invoice_html = render_template("invoice.html", sale_id=sale_id, sale=sale)
+    
+            invoice_folder = os.path.abspath("static/invoices")
+            os.makedirs(invoice_folder, exist_ok=True)
+            invoice_file = os.path.join(invoice_folder, f"invoice_{sale_id}.pdf")
+            invoice_url = f"/static/invoices/invoice_{sale_id}.pdf"
+    
+            # Save debug HTML (optional)
+            debug_path = os.path.abspath(f"debug_invoice_{sale_id}.html")
+            with open(debug_path, "w", encoding="utf-8") as f:
+                f.write(invoice_html)
+            print(">>> Debug HTML saved:", debug_path)
+    
+            pdf_options = {
+                "enable-local-file-access": None,
+                "quiet": "",
+                "zoom": "1.0"
+            }
+            pdfkit.from_string(invoice_html, invoice_file, configuration=config, options=pdf_options)
+            print(">>> PDF generated:", invoice_file)
+    
+            # -----------------------------
+            # Save invoice record & gallery
+            # -----------------------------
+            cursor.execute(
+                "INSERT INTO sales_invoices (sale_id, file_path) VALUES (%s, %s)",
+                (sale_id, invoice_url)
+            )
+    
+            cursor.execute(
+                "INSERT INTO gallery (business_id, filename) VALUES (%s, %s)",
+                (business_id, f"invoice_{sale_id}.pdf")
+            )
+    
+            db.commit()
+            print(">>> Database commit done")
+    
+            # -----------------------------
+            # Print mode
+            # -----------------------------
+            if print_mode.lower() == "yes":
+                return send_file(invoice_file, as_attachment=True)
+    
+            # Redirect normally
+            flash("Sale recorded successfully!", "success")
+            return redirect("/sales")
+    
+        except Exception as e:
+            db.rollback()
+            print("!!! Error recording sale:", str(e))
+            flash("Failed to record sale.", "danger")
+            return redirect("/sales")
 
 
     # -------------------------

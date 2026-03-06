@@ -1,33 +1,10 @@
-{% extends "base.html" %}
+h{% extends "base.html" %}
 {% block title %}Sales{% endblock %}
 {% block content %}
 
-<!-- AUTO PRICE SCRIPT (unchanged) -->
-<script>
-const productPrices = {
-    {% for p in products %}
-    "{{ p.id }}": {{ p.price }},
-    {% endfor %}
-};
+<h1 class="page-title">Sales</h1>
 
-document.addEventListener("DOMContentLoaded", function () {
-    const productSelect = document.querySelector("select[name='product_id']");
-    const priceDisplay = document.getElementById("price_display");
-    const priceHidden = document.getElementById("price_hidden");
-
-    productSelect.addEventListener("change", function () {
-        const price = productPrices[this.value];
-        priceDisplay.value = "R " + price.toFixed(2);
-        priceHidden.value = price;
-
-        // Reset scan counter when product changes manually
-        scanCount = 0;
-        document.getElementById("quantity").value = 0;
-    });
-});
-</script>
-
-<!-- FILTER CARD (unchanged) -->
+<!-- FILTER CARD -->
 <div class="card">
     <h3>Filter Sales</h3>
 
@@ -35,13 +12,13 @@ document.addEventListener("DOMContentLoaded", function () {
         <div class="filter-row">
 
             <div class="filter-item">
-                <label>Select Date</label>
-                <input type="date" name="date">
+                <label>Start Date</label>
+                <input type="date" name="start_date" placeholder="Start Date">
             </div>
 
             <div class="filter-item">
-                <label>Type Date (YYYY-MM-DD)</label>
-                <input type="text" name="typed_date" placeholder="2025-01-15">
+                <label>End Date</label>
+                <input type="date" name="end_date" placeholder="End Date">
             </div>
 
             <div class="filter-item">
@@ -61,8 +38,6 @@ document.addEventListener("DOMContentLoaded", function () {
         </div>
     </form>
 </div>
-
-<h1 class="page-title">Sales</h1>
 
 <!-- SALES ENTRY CARD -->
 <div class="card">
@@ -84,7 +59,8 @@ document.addEventListener("DOMContentLoaded", function () {
         <video id="preview" style="width:100%; border-radius:10px;"></video>
     </div>
 
-    <form method="post" style="margin-top: 25px;">
+    <!-- FIXED FORM ACTION -->
+    <form id="saleForm" action="/record_sale" method="post" style="margin-top: 25px;">
 
         <label>Product</label>
         <select name="product_id" id="product_id" required>
@@ -117,32 +93,20 @@ document.addEventListener("DOMContentLoaded", function () {
         <input type="text" id="price_display" disabled>
         <input type="hidden" name="price" id="price_hidden">
 
-        <button type="submit" class="btn-primary">Record Sale</button>
+        <!-- BUTTONS -->
+        <div style="margin-top: 20px; display:flex; gap:10px;">
+            <button type="submit" class="btn-primary">Record Sale</button>
+
+            <!-- FIXED BUTTON -->
+            <button type="button" class="btn-primary" style="background:#2a7;" onclick="recordAndPrint()">
+                Record & Print
+            </button>
+        </div>
+
     </form>
 </div>
 
-<!-- ADD PRODUCT MODAL -->
-<div id="addProductModal" class="card" style="display:none; margin-top:20px;">
-    <h3>Add New Product</h3>
-
-    <form id="addProductForm">
-        <label>Product Name</label>
-        <input type="text" name="name" required>
-
-        <label>Barcode</label>
-        <input type="text" name="barcode" id="new_product_barcode" readonly>
-
-        <label>Wholesale Price</label>
-        <input type="number" name="wholesale_price" step="0.01" required>
-
-        <label>Retail Price</label>
-        <input type="number" name="price" step="0.01" required>
-
-        <button type="button" class="btn-primary" onclick="saveNewProduct()">Save Product</button>
-    </form>
-</div>
-
-<!-- RECENT SALES TABLE (unchanged) -->
+<!-- RECENT SALES -->
 <div class="card">
     <h3>Recent Sales</h3>
     <table class="table">
@@ -164,13 +128,28 @@ document.addEventListener("DOMContentLoaded", function () {
     </table>
 </div>
 
-<!-- QUAGGA JS -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+<!-- FIXED PRINT SCRIPT -->
+<script>
+function recordAndPrint() {
+    const form = document.getElementById("saleForm");
 
+    // FORCE correct action
+    form.action = "/record_sale";
+
+    form.submit();
+
+    setTimeout(() => {
+        window.print();
+    }, 500);
+}
+</script>
+
+<!-- SCANNING ENGINE (unchanged) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
 <script>
 let lastScan = 0;
 let scanning = false;
-let scanCount = 0;  // NEW: count number of scans
+let scanCount = 0;
 
 function enableStopButton() {
     const stopBtn = document.getElementById("stopBtn");
@@ -204,7 +183,8 @@ function startScan() {
 
 function stopScan() {
     scanning = false;
-    
+    Quagga.stop();
+    document.getElementById("scanner").style.display = "none";
 }
 
 document.getElementById("barcode_input").addEventListener("change", function() {
@@ -231,46 +211,14 @@ function fetchProduct(barcode) {
                     document.getElementById("price_hidden").value = data.price;
                 }
 
-                // NEW: increase scan count
                 scanCount++;
-
-                // NEW: quantity = number of scans
                 document.getElementById("quantity").value = scanCount;
 
                 return;
             }
 
             stopScan();
-            document.getElementById("addProductModal").style.display = "block";
-            document.getElementById("new_product_barcode").value = data.barcode;
-        });
-}
-
-function saveNewProduct() {
-    const form = document.getElementById("addProductForm");
-    const formData = new FormData(form);
-
-    fetch("/add_product_from_stockin", { method: "POST", body: formData })
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-
-                document.getElementById("addProductModal").style.display = "none";
-
-                const select = document.getElementById("product_id");
-                const option = document.createElement("option");
-                option.value = data.product_id;
-                option.text = formData.get("name");
-                select.add(option);
-
-                select.value = data.product_id;
-                document.getElementById("product_name").innerText = formData.get("name");
-
-                scanCount = 0;
-                document.getElementById("quantity").value = 0;
-
-                startScan();
-            }
+            alert("Product not found.");
         });
 }
 </script>
