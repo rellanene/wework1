@@ -2,9 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Invoice #{{ sale_id }}</title>
+    <title>Invoice #50</title>
 
     <style>
+        /* FORCE WHITE BACKGROUND FOR PDF */
         html, body {
             background: #ffffff !important;
             color: #000000 !important;
@@ -21,7 +22,7 @@
             border: 1px solid #ddd;
             border-radius: 12px;
             padding: 30px;
-            max-width: 800px;
+            max-width: 700px;
             margin: auto;
         }
 
@@ -72,19 +73,13 @@
             border-bottom: 1px solid #eee;
         }
 
-        .totals-box {
+        .total-box {
             margin-top: 25px;
             padding: 20px;
             background: #fafafa;
             border-radius: 10px;
             border: 1px solid #e5e5e5;
-            font-size: 16px;
-        }
-
-        .totals-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
+            font-size: 18px;
         }
 
         .footer {
@@ -102,28 +97,23 @@
 
     <div class="header-section">
         <h1>INVOICE</h1>
-        <h3>#{{ sale_id }}</h3>
+        <h3>#50</h3>
     </div>
 
     <div class="info-box">
         <div class="info-row">
             <span class="info-label">Date:</span>
-            <span>{{ sale.created_at }}</span>
+            <span>2026-03-24 21:48:51</span>
         </div>
 
         <div class="info-row">
             <span class="info-label">Customer:</span>
-            <span>{{ sale.customer_name if sale.customer_name else "Walk-in Customer" }}</span>
+            <span>Tom</span>
         </div>
 
         <div class="info-row">
             <span class="info-label">Store:</span>
-            <span>{{ sale.store_name }}</span>
-        </div>
-
-        <div class="info-row">
-            <span class="info-label">Cashier:</span>
-            <span>{{ cashier_name }}</span>
+            <span>storage 4</span>
         </div>
     </div>
 
@@ -139,32 +129,18 @@
             </tr>
         </thead>
         <tbody>
-            {% for item in items %}
             <tr>
-                <td>{{ item.product_name }}</td>
-                <td>{{ item.quantity }}</td>
-                <td>{{ "%.2f"|format(item.price) }}</td>
-                <td>{{ "%.2f"|format(item.price * item.quantity) }}</td>
+                <td>WD Green2</td>
+                <td>2</td>
+                <td>999.00</td>
+                <td>1998.00</td>
             </tr>
-            {% endfor %}
         </tbody>
     </table>
 
-    <div class="totals-box">
-        <div class="totals-row">
-            <span>Subtotal:</span>
-            <strong>R {{ "%.2f"|format(subtotal) }}</strong>
-        </div>
-
-        <div class="totals-row">
-            <span>VAT (15%):</span>
-            <strong>R {{ "%.2f"|format(vat_amount) }}</strong>
-        </div>
-
-        <div class="totals-row" style="font-size: 20px;">
-            <span><strong>Total Amount:</strong></span>
-            <strong>R {{ "%.2f"|format(total_amount) }}</strong>
-        </div>
+    <div class="total-box">
+        <strong>Total Amount:</strong>
+        R 1998.00
     </div>
 
     <div class="footer">

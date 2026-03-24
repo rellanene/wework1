@@ -865,67 +865,144 @@ def create_app():
         cursor = db.cursor(dictionary=True)
     
         try:
-            # ----------------------------------------------------
-            # 1. Extract form data
-            # ----------------------------------------------------
             business_id = session["user"]["business_id"]
-            product_id = int(request.form.get("product_id"))
+            cashier_name = session["user"]["name"]
+    
+            # -----------------------------
+            # 1. Extract form data
+            # -----------------------------
+            product_ids = request.form.getlist("product_id[]")
+            quantities = request.form.getlist("quantity[]")
             customer_id = request.form.get("customer_id") or None
             store_id = int(request.form.get("store_id") or 0)
-            quantity = int(request.form.get("quantity", 1))
             print_mode = request.form.get("print_mode", "no")
     
-            # ----------------------------------------------------
-            # 2. Fetch product price from DB (REAL PRICE)
-            # ----------------------------------------------------
-            cursor.execute("SELECT name, price FROM products WHERE id=%s", (product_id,))
-            product = cursor.fetchone()
+            if not product_ids or not quantities:
+                raise Exception("No sale items received")
     
-            if not product:
-                flash("Product not found.", "danger")
-                return redirect("/sales")
+            if len(product_ids) != len(quantities):
+                raise Exception("Mismatched product/quantity arrays")
     
-            price = float(product["price"])
-            total_amount = price * quantity
+            # -----------------------------
+            # 2. Build sale items + totals
+            # -----------------------------
+            items = []
+            subtotal = 0.0
     
-            # ----------------------------------------------------
-            # 3. Insert sale into DB
-            # ----------------------------------------------------
+            for pid_raw, qty_raw in zip(product_ids, quantities):
+                if not pid_raw:
+                    continue
+    
+                product_id = int(pid_raw)
+                quantity = int(qty_raw or 0)
+                if quantity <= 0:
+                    continue
+    
+                cursor.execute("SELECT name, price FROM products WHERE id=%s", (product_id,))
+                product = cursor.fetchone()
+    
+                if not product:
+                    continue
+    
+                price = float(product["price"])
+                line_total = price * quantity
+                subtotal += line_total
+    
+                items.append({
+                    "product_id": product_id,
+                    "product_name": product["name"],
+                    "quantity": quantity,
+                    "price": price,
+                    "line_total": line_total
+                })
+    
+            if not items:
+                raise Exception("No valid sale items after processing")
+    
+            vat_rate = 0.15
+
+            total_amount = 0.0
+            vat_amount = 0.0
+            subtotal = 0.0
+            
+            for item in items:
+                price_with_vat = item["price"]
+                qty = item["quantity"]
+            
+                line_total = price_with_vat * qty
+                total_amount += line_total
+            
+            # Now extract VAT from VAT-inclusive total
+            subtotal = total_amount / (1 + vat_rate)
+            vat_amount = total_amount - subtotal
+    
+            # -----------------------------
+            # 3. Insert sale header
+            # -----------------------------
             cursor.execute("""
-                INSERT INTO sales (business_id, product_id, customer_id, store_id, quantity, price, total_amount)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """, (business_id, product_id, customer_id, store_id, quantity, price, total_amount))
+                INSERT INTO sales (business_id, customer_id, store_id, subtotal, vat_amount, total_amount)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (business_id, customer_id, store_id, subtotal, vat_amount, total_amount))
     
             db.commit()
             sale_id = cursor.lastrowid
-            print(">>> Sale inserted:", sale_id)
     
-            # ----------------------------------------------------
-            # 4. Reduce stock
-            # ----------------------------------------------------
-            if store_id:
-                reduce_stock_on_sale(product_id, store_id, quantity, business_id)
+            # -----------------------------
+            # 4. Insert sale items
+            # -----------------------------
+            for item in items:
+                cursor.execute("""
+                    INSERT INTO sale_items (sale_id, product_id, quantity, price, line_total)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (
+                    sale_id,
+                    item["product_id"],
+                    item["quantity"],
+                    item["price"],
+                    item["line_total"]
+                ))
     
-            # ----------------------------------------------------
-            # 5. Load sale details for invoice
-            # ----------------------------------------------------
+                # Reduce stock
+                if store_id:
+                    reduce_stock_on_sale(item["product_id"], store_id, item["quantity"], business_id)
+    
+            db.commit()
+    
+            # -----------------------------
+            # 5. Load sale for invoice
+            # -----------------------------
             cursor.execute("""
                 SELECT s.*, 
-                       p.name AS product_name,
                        c.name AS customer_name,
                        st.name AS store_name
                 FROM sales s
-                LEFT JOIN products p ON s.product_id = p.id
                 LEFT JOIN customers c ON s.customer_id = c.id
                 LEFT JOIN stores st ON s.store_id = st.id
                 WHERE s.id = %s
             """, (sale_id,))
             sale = cursor.fetchone()
     
-            # ----------------------------------------------------
+            cursor.execute("""
+                SELECT si.*, p.name AS product_name
+                FROM sale_items si
+                JOIN products p ON si.product_id = p.id
+                WHERE si.sale_id = %s
+            """, (sale_id,))
+            db_items = cursor.fetchall()
+    
+            # -----------------------------
             # 6. Render invoice HTML
-            # ----------------------------------------------------
-            invoice_html = render_template("invoice.html", sale_id=sale_id, sale=sale)
+            # -----------------------------
+            invoice_html = render_template(
+                "invoice.html",
+                sale_id=sale_id,
+                sale=sale,
+                items=db_items,
+                cashier_name=cashier_name,
+                subtotal=subtotal,
+                vat_amount=vat_amount,
+                total_amount=total_amount
+            )
     
             invoice_folder = os.path.abspath("static/invoices")
             os.makedirs(invoice_folder, exist_ok=True)
@@ -937,9 +1014,9 @@ def create_app():
             with open(f"debug_invoice_{sale_id}.html", "w", encoding="utf-8") as f:
                 f.write(invoice_html)
     
-            # ----------------------------------------------------
+            # -----------------------------
             # 7. Generate PDF
-            # ----------------------------------------------------
+            # -----------------------------
             pdf_options = {
                 "enable-local-file-access": None,
                 "quiet": "",
@@ -947,11 +1024,9 @@ def create_app():
             }
             pdfkit.from_string(invoice_html, invoice_file, configuration=config, options=pdf_options)
     
-            print(">>> PDF generated:", invoice_file)
-    
-            # ----------------------------------------------------
+            # -----------------------------
             # 8. Save invoice to gallery
-            # ----------------------------------------------------
+            # -----------------------------
             cursor.execute("""
                 INSERT INTO gallery (business_id, filename, file_path, description)
                 VALUES (%s, %s, %s, %s)
@@ -961,13 +1036,11 @@ def create_app():
                 invoice_url,
                 "Invoice PDF"
             ))
-    
             db.commit()
-            print(">>> Gallery entry saved")
     
-            # ----------------------------------------------------
+            # -----------------------------
             # 9. Print mode
-            # ----------------------------------------------------
+            # -----------------------------
             if print_mode.lower() == "yes":
                 return send_file(invoice_file, as_attachment=True)
     
@@ -976,7 +1049,7 @@ def create_app():
     
         except Exception as e:
             db.rollback()
-            print("!!! Error recording sale:", str(e))
+            print("SALE ERROR:", str(e))
             flash("Failed to record sale.", "danger")
             return redirect("/sales")
 
