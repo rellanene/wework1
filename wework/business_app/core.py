@@ -612,22 +612,30 @@ def create_app():
     @app.route("/gallery", methods=["GET", "POST"])
     @login_required
     def gallery():
-        business_id = session["user"]["business_id"]
         db = get_db()
         cursor = db.cursor(dictionary=True)
+        business_id = session["user"]["business_id"]
     
+        # -------------------------
+        # HANDLE FILE UPLOAD
+        # -------------------------
         if request.method == "POST":
             if "file" not in request.files:
                 flash("No file part", "danger")
                 return redirect(request.url)
     
             file = request.files["file"]
+    
             if file.filename == "":
                 flash("No selected file", "danger")
                 return redirect(request.url)
     
             if file and allowed_file(file.filename):
                 filename = secure_filename(file.filename)
+    
+                # Ensure upload folder exists
+                os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+    
                 filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
                 file.save(filepath)
     
@@ -636,11 +644,19 @@ def create_app():
                     VALUES (%s, %s)
                 """, (business_id, filename))
                 db.commit()
-                flash("File uploaded", "success")
+    
+                flash("File uploaded successfully", "success")
                 return redirect(url_for("gallery"))
     
-        # Fetch all files for this business
-        cursor.execute("SELECT * FROM gallery WHERE business_id=%s ORDER BY created_at DESC", (business_id,))
+        # -------------------------
+        # FETCH FILES (ALWAYS RUNS)
+        # -------------------------
+        cursor.execute("""
+            SELECT * FROM gallery
+            WHERE business_id=%s
+            ORDER BY created_at DESC
+        """, (business_id,))
+        
         files = cursor.fetchall()
     
         return render_template("gallery.html", files=files)
@@ -849,42 +865,50 @@ def create_app():
         cursor = db.cursor(dictionary=True)
     
         try:
-            # -----------------------------
-            # Get form data
-            # -----------------------------
+            # ----------------------------------------------------
+            # 1. Extract form data
+            # ----------------------------------------------------
             business_id = session["user"]["business_id"]
             product_id = int(request.form.get("product_id"))
             customer_id = request.form.get("customer_id") or None
             store_id = int(request.form.get("store_id") or 0)
-            quantity_raw = request.form.get("quantity", "0").strip()
-            price_raw = request.form.get("price", "0").strip()
+            quantity = int(request.form.get("quantity", 1))
             print_mode = request.form.get("print_mode", "no")
     
-            # Convert to proper types
-            quantity = int(quantity_raw) if quantity_raw.isdigit() else 0
-            price = float(price_raw) if price_raw.replace('.', '', 1).isdigit() else 0.0
-            total_amount = quantity * price
+            # ----------------------------------------------------
+            # 2. Fetch product price from DB (REAL PRICE)
+            # ----------------------------------------------------
+            cursor.execute("SELECT name, price FROM products WHERE id=%s", (product_id,))
+            product = cursor.fetchone()
     
-            # -----------------------------
-            # Insert sale into DB
-            # -----------------------------
+            if not product:
+                flash("Product not found.", "danger")
+                return redirect("/sales")
+    
+            price = float(product["price"])
+            total_amount = price * quantity
+    
+            # ----------------------------------------------------
+            # 3. Insert sale into DB
+            # ----------------------------------------------------
             cursor.execute("""
                 INSERT INTO sales (business_id, product_id, customer_id, store_id, quantity, price, total_amount)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, (business_id, product_id, customer_id, store_id, quantity, price, total_amount))
+    
             db.commit()
             sale_id = cursor.lastrowid
             print(">>> Sale inserted:", sale_id)
     
-            # -----------------------------
-            # Reduce stock
-            # -----------------------------
+            # ----------------------------------------------------
+            # 4. Reduce stock
+            # ----------------------------------------------------
             if store_id:
                 reduce_stock_on_sale(product_id, store_id, quantity, business_id)
     
-            # -----------------------------
-            # Load sale details for invoice
-            # -----------------------------
+            # ----------------------------------------------------
+            # 5. Load sale details for invoice
+            # ----------------------------------------------------
             cursor.execute("""
                 SELECT s.*, 
                        p.name AS product_name,
@@ -898,53 +922,55 @@ def create_app():
             """, (sale_id,))
             sale = cursor.fetchone()
     
-            # -----------------------------
-            # Generate invoice HTML & PDF
-            # -----------------------------
+            # ----------------------------------------------------
+            # 6. Render invoice HTML
+            # ----------------------------------------------------
             invoice_html = render_template("invoice.html", sale_id=sale_id, sale=sale)
     
             invoice_folder = os.path.abspath("static/invoices")
             os.makedirs(invoice_folder, exist_ok=True)
+    
             invoice_file = os.path.join(invoice_folder, f"invoice_{sale_id}.pdf")
             invoice_url = f"/static/invoices/invoice_{sale_id}.pdf"
     
-            # Save debug HTML (optional)
-            debug_path = os.path.abspath(f"debug_invoice_{sale_id}.html")
-            with open(debug_path, "w", encoding="utf-8") as f:
+            # Debug HTML (optional)
+            with open(f"debug_invoice_{sale_id}.html", "w", encoding="utf-8") as f:
                 f.write(invoice_html)
-            print(">>> Debug HTML saved:", debug_path)
     
+            # ----------------------------------------------------
+            # 7. Generate PDF
+            # ----------------------------------------------------
             pdf_options = {
                 "enable-local-file-access": None,
                 "quiet": "",
                 "zoom": "1.0"
             }
             pdfkit.from_string(invoice_html, invoice_file, configuration=config, options=pdf_options)
+    
             print(">>> PDF generated:", invoice_file)
     
-            # -----------------------------
-            # Save invoice record & gallery
-            # -----------------------------
-            cursor.execute(
-                "INSERT INTO sales_invoices (sale_id, file_path) VALUES (%s, %s)",
-                (sale_id, invoice_url)
-            )
-    
-            cursor.execute(
-                "INSERT INTO gallery (business_id, filename) VALUES (%s, %s)",
-                (business_id, f"invoice_{sale_id}.pdf")
-            )
+            # ----------------------------------------------------
+            # 8. Save invoice to gallery
+            # ----------------------------------------------------
+            cursor.execute("""
+                INSERT INTO gallery (business_id, filename, file_path, description)
+                VALUES (%s, %s, %s, %s)
+            """, (
+                business_id,
+                f"invoice_{sale_id}.pdf",
+                invoice_url,
+                "Invoice PDF"
+            ))
     
             db.commit()
-            print(">>> Database commit done")
+            print(">>> Gallery entry saved")
     
-            # -----------------------------
-            # Print mode
-            # -----------------------------
+            # ----------------------------------------------------
+            # 9. Print mode
+            # ----------------------------------------------------
             if print_mode.lower() == "yes":
                 return send_file(invoice_file, as_attachment=True)
     
-            # Redirect normally
             flash("Sale recorded successfully!", "success")
             return redirect("/sales")
     

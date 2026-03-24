@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+
 <h2>Gallery / Files</h2>
 
 <!-- Upload Form -->
@@ -14,19 +15,31 @@
 <div class="gallery-grid">
     {% for f in files %}
         <div class="gallery-item">
-            {% if f.filename.endswith('.pdf') %}
-                <!-- Embed PDF -->
-                <embed src="{{ url_for('uploaded_file', filename=f.filename) }}" type="application/pdf" width="300" height="400">
+
+            {% set path = f.file_path if f.file_path else '/static/uploads/' ~ f.filename %}
+
+            {% if f.filename.lower().endswith('.pdf') %}
+                <!-- PDF Preview -->
+                <embed src="{{ path }}" type="application/pdf" width="300" height="400">
                 <p>{{ f.filename }}</p>
-                <a href="{{ url_for('uploaded_file', filename=f.filename) }}" download>Download PDF</a>
-            {% elif f.filename.endswith('.jpg') or f.filename.endswith('.jpeg') or f.filename.endswith('.png') or f.filename.endswith('.gif') %}
-                <img src="{{ url_for('uploaded_file', filename=f.filename) }}" width="300">
+                <a href="{{ path }}" download>Download PDF</a>
+
+            {% elif f.filename.lower().endswith('.jpg') 
+                or f.filename.lower().endswith('.jpeg') 
+                or f.filename.lower().endswith('.png') 
+                or f.filename.lower().endswith('.gif') %}
+
+                <!-- Image Preview -->
+                <img src="{{ path }}" width="300">
                 <p>{{ f.filename }}</p>
-                <a href="{{ url_for('uploaded_file', filename=f.filename) }}" download>Download Image</a>
+                <a href="{{ path }}" download>Download Image</a>
+
             {% else %}
+                <!-- Unsupported File -->
                 <p>{{ f.filename }} (unsupported preview)</p>
-                <a href="{{ url_for('uploaded_file', filename=f.filename) }}" download>Download File</a>
+                <a href="{{ path }}" download>Download File</a>
             {% endif %}
+
         </div>
     {% endfor %}
 </div>
@@ -43,4 +56,5 @@
     text-align: center;
 }
 </style>
+
 {% endblock %}

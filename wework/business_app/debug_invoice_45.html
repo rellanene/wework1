@@ -2,24 +2,19 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Invoice #{{ sale_id }}</title>
+    <title>Invoice #45</title>
 
     <style>
-        /* FORCE WHITE BACKGROUND FOR PDF */
-        html, body {
-            background: #ffffff !important;
-            color: #000000 !important;
+        body {
             font-family: 'Segoe UI', sans-serif;
+            background: #111;
+            color: #eee;
             padding: 40px;
         }
 
-        @page {
-            background: #ffffff !important;
-        }
-
         .invoice-container {
-            background: #ffffff !important;
-            border: 1px solid #ddd;
+            background: #1a1a1a;
+            border: 1px solid #333;
             border-radius: 12px;
             padding: 30px;
             max-width: 700px;
@@ -27,7 +22,7 @@
         }
 
         h1, h2, h3 {
-            color: #d4af37;
+            color: #d4af37; /* Luxury gold */
             margin-bottom: 5px;
         }
 
@@ -39,9 +34,9 @@
         .info-box {
             margin-bottom: 25px;
             padding: 15px;
-            background: #fafafa;
+            background: #151515;
             border-radius: 10px;
-            border: 1px solid #e5e5e5;
+            border: 1px solid #2a2a2a;
         }
 
         .info-row {
@@ -51,7 +46,7 @@
         }
 
         .info-label {
-            color: #555;
+            color: #888;
         }
 
         table {
@@ -61,24 +56,24 @@
         }
 
         th {
-            background: #f2f2f2;
-            color: #000;
+            background: #222;
+            color: #d4af37;
             padding: 10px;
             text-align: left;
-            border-bottom: 1px solid #ddd;
+            border-bottom: 1px solid #333;
         }
 
         td {
             padding: 10px;
-            border-bottom: 1px solid #eee;
+            border-bottom: 1px solid #333;
         }
 
         .total-box {
             margin-top: 25px;
             padding: 20px;
-            background: #fafafa;
+            background: #151515;
             border-radius: 10px;
-            border: 1px solid #e5e5e5;
+            border: 1px solid #2a2a2a;
             font-size: 18px;
         }
 
@@ -87,6 +82,25 @@
             margin-top: 40px;
             color: #777;
             font-size: 14px;
+        }
+
+        @media print {
+            body {
+                background: white;
+                color: black;
+            }
+            .invoice-container {
+                background: white;
+                border: none;
+                color: black;
+            }
+            h1, h2, h3 {
+                color: black;
+            }
+            th {
+                background: #eee;
+                color: black;
+            }
         }
     </style>
 </head>
@@ -97,23 +111,23 @@
 
     <div class="header-section">
         <h1>INVOICE</h1>
-        <h3>#{{ sale_id }}</h3>
+        <h3>#45</h3>
     </div>
 
     <div class="info-box">
         <div class="info-row">
             <span class="info-label">Date:</span>
-            <span>{{ sale.created_at }}</span>
+            <span>2026-03-23 22:57:10</span>
         </div>
 
         <div class="info-row">
             <span class="info-label">Customer:</span>
-            <span>{{ sale.customer_name if sale.customer_name else "Walk-in Customer" }}</span>
+            <span>Jack</span>
         </div>
 
         <div class="info-row">
             <span class="info-label">Store:</span>
-            <span>{{ sale.store_name }}</span>
+            <span>storage 1</span>
         </div>
     </div>
 
@@ -130,17 +144,17 @@
         </thead>
         <tbody>
             <tr>
-                <td>{{ sale.product_name }}</td>
-                <td>{{ sale.quantity }}</td>
-                <td>{{ "%.2f"|format(sale.price) }}</td>
-                <td>{{ "%.2f"|format(sale.price * sale.quantity) }}</td>
+                <td>SSD Hard Drive 1TB</td>
+                <td>1</td>
+                <td>0.00</td>
+                <td>0.00</td>
             </tr>
         </tbody>
     </table>
 
     <div class="total-box">
         <strong>Total Amount:</strong>
-        R {{ "%.2f"|format(sale.price * sale.quantity) }}
+        R 0.00
     </div>
 
     <div class="footer">
