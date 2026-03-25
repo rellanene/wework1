@@ -24,7 +24,7 @@
 
     <div class="card stat-card">
         <h3>Total Sales</h3>
-        <div class="stat-value">R {{ data.sales.total_sales }}</div>
+        <div class="stat-value">R {{ "%.2f"|format(data.sales.total_sales) }}</div>
         <p class="muted">{{ data.sales.total_transactions }} transactions</p>
     </div>
 
@@ -38,18 +38,18 @@
 <div class="grid-3">
 
     <div class="card stat-card">
-        <h3>Customers</h3>
-        <div class="stat-value">{{ data.customers.total_customers }}</div>
+        <h3>Total Profit</h3>
+        <div class="stat-value">R {{ "%.2f"|format(data.total_profit) }}</div>
     </div>
 
     <div class="card stat-card">
         <h3>Wholesale Stock Value</h3>
-        <div class="stat-value">R {{ data.finances.wholesale_value }}</div>
+        <div class="stat-value">R {{ "%.2f"|format(data.finances.wholesale_value) }}</div>
     </div>
 
     <div class="card stat-card">
         <h3>Retail Stock Value</h3>
-        <div class="stat-value">R {{ data.finances.retail_value }}</div>
+        <div class="stat-value">R {{ "%.2f"|format(data.finances.retail_value) }}</div>
     </div>
 
 </div>

@@ -881,7 +881,7 @@ def create_app():
             end_date=end_date
         )
     
-    
+#---------------VISUALS--------------------------
     @app.route("/visuals", methods=["GET", "POST"])
     @login_required
     def visuals():
@@ -932,13 +932,20 @@ def create_app():
         """, (business_id,))
         stores_summary = cursor.fetchone()
     
-        # CUSTOMERS SUMMARY
+        # ⭐ TOTAL PROFIT (replaces customers)
         cursor.execute("""
-            SELECT COUNT(*) AS total_customers
-            FROM customers
-            WHERE business_id=%s
-        """, (business_id,))
-        customers_summary = cursor.fetchone()
+            SELECT 
+                IFNULL(SUM(s.total_amount), 0) AS total_sales,
+                IFNULL(SUM(p.wholesale_price * si.quantity), 0) AS total_cost
+            FROM sales s
+            LEFT JOIN sale_items si ON s.id = si.sale_id
+            LEFT JOIN products p ON si.product_id = p.id
+            WHERE s.business_id = %s
+              AND DATE(s.created_at) BETWEEN %s AND %s
+        """, (business_id, start_date, end_date))
+    
+        profit_row = cursor.fetchone()
+        total_profit = profit_row["total_sales"] - profit_row["total_cost"]
     
         # FINANCES SUMMARY
         cursor.execute("""
@@ -954,7 +961,7 @@ def create_app():
             "products": products_summary,
             "sales": sales_summary,
             "stores": stores_summary,
-            "customers": customers_summary,
+            "total_profit": total_profit,   # ⭐ FIXED
             "finances": finances_summary,
             "sales_timeseries": sales_timeseries,
             "start_date": start_date,
