@@ -531,8 +531,8 @@ def create_app():
         # -------------------------
         # FILTERS
         # -------------------------
-        date_filter = request.args.get("date")
-        typed_date = request.args.get("typed_date")
+        start_date = request.args.get("start_date")
+        end_date = request.args.get("end_date")
         product_name = request.args.get("product_name")
     
         # -------------------------
@@ -543,7 +543,7 @@ def create_app():
                    p.name AS product_name,
                    fs.name AS from_store_name,
                    ts.name AS to_store_name,
-                   sm.sale_id   -- ✅ REQUIRED FOR INVOICE LINK
+                   sm.sale_id
             FROM stock_movements sm
             LEFT JOIN products p ON sm.product_id = p.id
             LEFT JOIN stores fs ON sm.from_store_id = fs.id
@@ -556,18 +556,23 @@ def create_app():
         # -------------------------
         # APPLY FILTERS
         # -------------------------
-        if date_filter:
-            conditions.append("DATE(sm.created_at) = %s")
-            params.append(date_filter)
     
-        if typed_date:
-            conditions.append("DATE(sm.created_at) = %s")
-            params.append(typed_date)
+        # Start Date
+        if start_date:
+            conditions.append("DATE(sm.created_at) >= %s")
+            params.append(start_date)
     
+        # End Date
+        if end_date:
+            conditions.append("DATE(sm.created_at) <= %s")
+            params.append(end_date)
+    
+        # Product Name
         if product_name:
             conditions.append("p.name LIKE %s")
             params.append(f"%{product_name}%")
     
+        # Final query
         query += " WHERE " + " AND ".join(conditions)
         query += " ORDER BY sm.created_at DESC LIMIT 200"
     
@@ -575,7 +580,7 @@ def create_app():
         movements = cursor.fetchall()
     
         return render_template(
-            "stock_movements.html",   # ✅ FIXED TEMPLATE NAME
+            "stock_movements.html",
             products=products,
             movements=movements
         )
