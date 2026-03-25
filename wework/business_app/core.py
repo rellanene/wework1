@@ -88,22 +88,25 @@ def add_stock(product_id, store_id, quantity, business_id):
     db.commit()
 
 
-def reduce_stock_on_sale(product_id, store_id, quantity, business_id):
+def reduce_stock_on_sale(product_id, store_id, quantity, business_id, sale_id):
     db = get_db()
     cursor = db.cursor()
 
     inv_id = get_or_create_inventory(product_id, store_id)
 
+    # Reduce stock
     cursor.execute("""
         UPDATE inventory
         SET quantity = quantity - %s
         WHERE id=%s
     """, (quantity, inv_id))
 
+    # Record movement WITH sale_id (IMPORTANT)
     cursor.execute("""
-        INSERT INTO stock_movements (product_id, business_id, from_store_id, quantity, movement_type)
-        VALUES (%s, %s, %s, %s, 'sale')
-    """, (product_id, business_id, store_id, quantity))
+        INSERT INTO stock_movements 
+        (product_id, business_id, from_store_id, quantity, movement_type, sale_id)
+        VALUES (%s, %s, %s, %s, 'sale', %s)
+    """, (product_id, business_id, store_id, quantity, sale_id))
 
     db.commit()
 
@@ -433,146 +436,149 @@ def create_app():
 # -------------------------
 # SALES (WITH FILTERS)
 # -------------------------
-    @app.route("/sales", methods=["GET", "POST"])
+    @app.route("/sales", methods=["GET"])
     @login_required
     def sales():
         business_id = session["user"]["business_id"]
         db = get_db()
         cursor = db.cursor(dictionary=True)
-
-        # Load dropdown data
+    
+        # -------------------------
+        # LOAD DROPDOWNS
+        # -------------------------
         cursor.execute("SELECT * FROM products WHERE business_id=%s", (business_id,))
         products_list = cursor.fetchall()
-
+    
         cursor.execute("SELECT * FROM customers WHERE business_id=%s", (business_id,))
         customers_list = cursor.fetchall()
-
+    
         cursor.execute("SELECT * FROM stores WHERE business_id=%s", (business_id,))
         stores_list = cursor.fetchall()
-
+    
         # -------------------------
         # FILTERS
         # -------------------------
-        date_filter = request.args.get("date")
-        typed_date = request.args.get("typed_date")
+        start_date = request.args.get("start_date")
+        end_date = request.args.get("end_date")
         product_name = request.args.get("product_name")
-
+    
         query = """
-            SELECT s.*, p.name AS product_name, c.name AS customer_name
+            SELECT s.*, 
+                   c.name AS customer_name,
+                   st.name AS store_name
             FROM sales s
-            LEFT JOIN products p ON s.product_id = p.id
             LEFT JOIN customers c ON s.customer_id = c.id
-            WHERE s.business_id=%s
+            LEFT JOIN stores st ON s.store_id = st.id
+            WHERE s.business_id = %s
         """
         params = [business_id]
-
-        if date_filter:
-            query += " AND DATE(s.created_at) = %s"
-            params.append(date_filter)
-
-        if typed_date:
-            query += " AND DATE(s.created_at) = %s"
-            params.append(typed_date)
-
+    
+        # DATE FILTERS
+        if start_date:
+            query += " AND DATE(s.created_at) >= %s"
+            params.append(start_date)
+    
+        if end_date:
+            query += " AND DATE(s.created_at) <= %s"
+            params.append(end_date)
+    
+        # PRODUCT FILTER (multi-item)
         if product_name:
-            query += " AND p.name LIKE %s"
+            query += """
+                AND s.id IN (
+                    SELECT si.sale_id
+                    FROM sale_items si
+                    JOIN products p ON si.product_id = p.id
+                    WHERE p.name LIKE %s
+                )
+            """
             params.append(f"%{product_name}%")
-
+    
         query += " ORDER BY s.created_at DESC LIMIT 200"
-
+    
         cursor.execute(query, params)
         sales_list = cursor.fetchall()
-
-    # -------------------------
-    # PROCESS NEW SALE
-    # -------------------------
-        if request.method == "POST":
-            product_id = int(request.form["product_id"])
-            customer_id = request.form.get("customer_id") or None
-            store_id = int(request.form["store_id"])
-            quantity = int(request.form["quantity"])
-
-            cursor.execute("SELECT price FROM products WHERE id=%s", (product_id,))
-            product = cursor.fetchone()
-            price = float(product["price"])
-
-            total_amount = quantity * price
-
-            cursor.execute("""
-                INSERT INTO sales (business_id, product_id, customer_id, total_amount)
-                VALUES (%s, %s, %s, %s)
-            """, (business_id, product_id, customer_id, total_amount))
-            db.commit()
-
-            reduce_stock_on_sale(product_id, store_id, quantity, business_id)
-
-            flash("Sale recorded", "success")
-            return redirect(url_for("sales"))
-
+    
         return render_template(
             "sales.html",
             products=products_list,
             customers=customers_list,
             stores=stores_list,
             sales=sales_list
-    )
+        )
 
     # -------------------------
     # STOCK MOVEMENTS HISTORY (optional view)
     # -------------------------
-    @app.route("/stock-movements", methods=["GET"])
+    @app.route("/movements")
     @login_required
     def stock_movements():
         business_id = session["user"]["business_id"]
         db = get_db()
         cursor = db.cursor(dictionary=True)
-
-    # --- Filters ---
+    
+        # -------------------------
+        # PRODUCTS FOR DROPDOWN
+        # -------------------------
+        cursor.execute("""
+            SELECT name 
+            FROM products 
+            WHERE business_id=%s 
+            ORDER BY name ASC
+        """, (business_id,))
+        products = cursor.fetchall()
+    
+        # -------------------------
+        # FILTERS
+        # -------------------------
         date_filter = request.args.get("date")
         typed_date = request.args.get("typed_date")
         product_name = request.args.get("product_name")
-
+    
+        # -------------------------
+        # BASE QUERY
+        # -------------------------
         query = """
-            SELECT sm.*, p.name AS product_name,
-               fs.name AS from_store_name,
-               ts.name AS to_store_name
+            SELECT sm.*,
+                   p.name AS product_name,
+                   fs.name AS from_store_name,
+                   ts.name AS to_store_name,
+                   sm.sale_id   -- ✅ REQUIRED FOR INVOICE LINK
             FROM stock_movements sm
-            JOIN products p ON sm.product_id = p.id
+            LEFT JOIN products p ON sm.product_id = p.id
             LEFT JOIN stores fs ON sm.from_store_id = fs.id
             LEFT JOIN stores ts ON sm.to_store_id = ts.id
-            WHERE sm.business_id=%s
         """
+    
+        conditions = ["sm.business_id = %s"]
         params = [business_id]
-
-    # Filter by calendar date
+    
+        # -------------------------
+        # APPLY FILTERS
+        # -------------------------
         if date_filter:
-            query += " AND DATE(sm.created_at) = %s"
+            conditions.append("DATE(sm.created_at) = %s")
             params.append(date_filter)
-
-    # Filter by typed date
+    
         if typed_date:
-            query += " AND DATE(sm.created_at) = %s"
+            conditions.append("DATE(sm.created_at) = %s")
             params.append(typed_date)
-
-    # Filter by product name
+    
         if product_name:
-            query += " AND p.name LIKE %s"
+            conditions.append("p.name LIKE %s")
             params.append(f"%{product_name}%")
-
+    
+        query += " WHERE " + " AND ".join(conditions)
         query += " ORDER BY sm.created_at DESC LIMIT 200"
-
+    
         cursor.execute(query, params)
         movements = cursor.fetchall()
-
-    # Load product list for dropdown
-        cursor.execute("SELECT name FROM products WHERE business_id=%s ORDER BY name ASC", (business_id,))
-        products = cursor.fetchall()
-
+    
         return render_template(
-            "stock_movements.html",
-        movements=movements,
-        products=products
-    )
+            "stock_movements.html",   # ✅ FIXED TEMPLATE NAME
+            products=products,
+            movements=movements
+        )
     # -------------------------
     # CUSTOMERS
     # -------------------------
@@ -851,7 +857,12 @@ def create_app():
 
 # Correct wkhtmltopdf configuration (must be an object, not a dict)
     path_wkhtmltopdf = r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe"
+
+    if not os.path.exists(path_wkhtmltopdf):
+        raise Exception("wkhtmltopdf NOT FOUND. Check installation path.")
+
     config = pdfkit.configuration(wkhtmltopdf=path_wkhtmltopdf)
+   
 
 
    
@@ -868,33 +879,25 @@ def create_app():
             business_id = session["user"]["business_id"]
             cashier_name = session["user"]["name"]
     
-            # -----------------------------
-            # 1. Extract form data
-            # -----------------------------
             product_ids = request.form.getlist("product_id[]")
             quantities = request.form.getlist("quantity[]")
             customer_id = request.form.get("customer_id") or None
             store_id = int(request.form.get("store_id") or 0)
-            print_mode = request.form.get("print_mode", "no")
     
-            if not product_ids or not quantities:
-                raise Exception("No sale items received")
-    
-            if len(product_ids) != len(quantities):
-                raise Exception("Mismatched product/quantity arrays")
-    
-            # -----------------------------
-            # 2. Build sale items + totals
-            # -----------------------------
             items = []
-            subtotal = 0.0
+            total_amount = 0.0
     
+            # -------------------------
+            # BUILD SALE ITEMS
+            # -------------------------
             for pid_raw, qty_raw in zip(product_ids, quantities):
-                if not pid_raw:
+    
+                if not pid_raw or not pid_raw.isdigit():
                     continue
     
                 product_id = int(pid_raw)
                 quantity = int(qty_raw or 0)
+    
                 if quantity <= 0:
                     continue
     
@@ -906,39 +909,26 @@ def create_app():
     
                 price = float(product["price"])
                 line_total = price * quantity
-                subtotal += line_total
+                total_amount += line_total
     
                 items.append({
                     "product_id": product_id,
-                    "product_name": product["name"],
                     "quantity": quantity,
                     "price": price,
                     "line_total": line_total
                 })
     
             if not items:
-                raise Exception("No valid sale items after processing")
+                raise Exception("No valid sale items")
     
+            # VAT calculations
             vat_rate = 0.15
-
-            total_amount = 0.0
-            vat_amount = 0.0
-            subtotal = 0.0
-            
-            for item in items:
-                price_with_vat = item["price"]
-                qty = item["quantity"]
-            
-                line_total = price_with_vat * qty
-                total_amount += line_total
-            
-            # Now extract VAT from VAT-inclusive total
             subtotal = total_amount / (1 + vat_rate)
             vat_amount = total_amount - subtotal
     
-            # -----------------------------
-            # 3. Insert sale header
-            # -----------------------------
+            # -------------------------
+            # INSERT SALE
+            # -------------------------
             cursor.execute("""
                 INSERT INTO sales (business_id, customer_id, store_id, subtotal, vat_amount, total_amount)
                 VALUES (%s, %s, %s, %s, %s, %s)
@@ -947,9 +937,9 @@ def create_app():
             db.commit()
             sale_id = cursor.lastrowid
     
-            # -----------------------------
-            # 4. Insert sale items
-            # -----------------------------
+            # -------------------------
+            # INSERT ITEMS + STOCK MOVEMENTS
+            # -------------------------
             for item in items:
                 cursor.execute("""
                     INSERT INTO sale_items (sale_id, product_id, quantity, price, line_total)
@@ -962,87 +952,35 @@ def create_app():
                     item["line_total"]
                 ))
     
-                # Reduce stock
                 if store_id:
-                    reduce_stock_on_sale(item["product_id"], store_id, item["quantity"], business_id)
+                    reduce_stock_on_sale(
+                        item["product_id"],
+                        store_id,
+                        item["quantity"],
+                        business_id,
+                        sale_id
+                    )
     
             db.commit()
     
-            # -----------------------------
-            # 5. Load sale for invoice
-            # -----------------------------
-            cursor.execute("""
-                SELECT s.*, 
-                       c.name AS customer_name,
-                       st.name AS store_name
-                FROM sales s
-                LEFT JOIN customers c ON s.customer_id = c.id
-                LEFT JOIN stores st ON s.store_id = st.id
-                WHERE s.id = %s
-            """, (sale_id,))
-            sale = cursor.fetchone()
+            # -------------------------
+            # FETCH SALE DATA FOR INVOICE
+            # -------------------------
+            cursor.execute("SELECT * FROM sales WHERE id=%s", (sale_id,))
+            sale_data = cursor.fetchone()
     
             cursor.execute("""
                 SELECT si.*, p.name AS product_name
                 FROM sale_items si
-                JOIN products p ON si.product_id = p.id
-                WHERE si.sale_id = %s
+                LEFT JOIN products p ON si.product_id = p.id
+                WHERE si.sale_id=%s
             """, (sale_id,))
-            db_items = cursor.fetchall()
+            sale_data["items"] = cursor.fetchall()
     
-            # -----------------------------
-            # 6. Render invoice HTML
-            # -----------------------------
-            invoice_html = render_template(
-                "invoice.html",
-                sale_id=sale_id,
-                sale=sale,
-                items=db_items,
-                cashier_name=cashier_name,
-                subtotal=subtotal,
-                vat_amount=vat_amount,
-                total_amount=total_amount
-            )
-    
-            invoice_folder = os.path.abspath("static/invoices")
-            os.makedirs(invoice_folder, exist_ok=True)
-    
-            invoice_file = os.path.join(invoice_folder, f"invoice_{sale_id}.pdf")
-            invoice_url = f"/static/invoices/invoice_{sale_id}.pdf"
-    
-            # Debug HTML (optional)
-            with open(f"debug_invoice_{sale_id}.html", "w", encoding="utf-8") as f:
-                f.write(invoice_html)
-    
-            # -----------------------------
-            # 7. Generate PDF
-            # -----------------------------
-            pdf_options = {
-                "enable-local-file-access": None,
-                "quiet": "",
-                "zoom": "1.0"
-            }
-            pdfkit.from_string(invoice_html, invoice_file, configuration=config, options=pdf_options)
-    
-            # -----------------------------
-            # 8. Save invoice to gallery
-            # -----------------------------
-            cursor.execute("""
-                INSERT INTO gallery (business_id, filename, file_path, description)
-                VALUES (%s, %s, %s, %s)
-            """, (
-                business_id,
-                f"invoice_{sale_id}.pdf",
-                invoice_url,
-                "Invoice PDF"
-            ))
-            db.commit()
-    
-            # -----------------------------
-            # 9. Print mode
-            # -----------------------------
-            if print_mode.lower() == "yes":
-                return send_file(invoice_file, as_attachment=True)
+            # -------------------------
+            # GENERATE INVOICE PDF (using invoice.html)
+            # -------------------------
+            generate_invoice_for_sale(sale_id, sale_data)
     
             flash("Sale recorded successfully!", "success")
             return redirect("/sales")
@@ -1050,7 +988,7 @@ def create_app():
         except Exception as e:
             db.rollback()
             print("SALE ERROR:", str(e))
-            flash("Failed to record sale.", "danger")
+            flash(str(e), "danger")
             return redirect("/sales")
 
 
@@ -1076,6 +1014,123 @@ def create_app():
     
         flash("Supplier order placed successfully!", "success")
         return redirect(url_for("finances"))
+    
+    #-------------Generate Invoice-----------
+
+
+    from flask import render_template
+    
+    def generate_invoice_for_sale(sale_id, sale_data):
+        """
+        Generates a PDF invoice and saves it to disk,
+        then records it in the gallery table.
+        """
+    
+        try:
+            # -------------------------
+            # WKHTMLTOPDF SETUP
+            # -------------------------
+            path_wkhtmltopdf = r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe"
+    
+            if not os.path.exists(path_wkhtmltopdf):
+                raise Exception("wkhtmltopdf NOT FOUND")
+    
+            config = pdfkit.configuration(wkhtmltopdf=path_wkhtmltopdf)
+    
+            # -------------------------
+            # PATH SETUP
+            # -------------------------
+            BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+            invoices_folder = os.path.join(BASE_DIR, "static", "invoices")
+            os.makedirs(invoices_folder, exist_ok=True)
+    
+            filename = f"invoice_{sale_id}.pdf"
+            output_path = os.path.join(invoices_folder, filename)
+    
+            # -------------------------
+            # VALIDATE SALE DATA
+            # -------------------------
+            if not sale_data:
+                raise Exception("Sale data is missing")
+    
+            if "business_id" not in sale_data:
+                raise Exception("business_id missing in sale_data")
+    
+            # -------------------------
+            # RENDER HTML
+            # -------------------------
+            html = render_template(
+                "invoice.html",
+                sale_id=sale_id,
+                sale=sale_data,
+                items=sale_data.get("items", []),
+                subtotal=sale_data.get("subtotal", 0),
+                vat_amount=sale_data.get("vat_amount", 0),
+                total_amount=sale_data.get("total_amount", 0),
+                cashier_name=sale_data.get("cashier_name", "N/A")
+            )
+    
+            # -------------------------
+            # GENERATE PDF
+            # -------------------------
+            pdfkit.from_string(html, output_path, configuration=config)
+    
+            print("✅ Invoice generated:", output_path)
+    
+            # -------------------------
+            # SAVE TO GALLERY (OPTION A)
+            # -------------------------
+            db = get_db()
+            cursor = db.cursor()
+    
+            cursor.execute("""
+                INSERT INTO gallery (business_id, filename)
+                VALUES (%s, %s)
+            """, (
+                sale_data["business_id"],
+                filename
+            ))
+    
+            db.commit()
+    
+            print("✅ Invoice saved to gallery DB")
+    
+            return output_path
+    
+        except Exception as e:
+            print("❌ ERROR GENERATING INVOICE:", str(e))
+            raise
+    #--------------View Invoice-----------
+    @app.route("/invoice/<int:sale_id>")
+    @login_required
+    def view_invoice(sale_id):
+        import os
+        from flask import send_file, flash, redirect, abort
+    
+        # Safe absolute path
+        invoice_path = os.path.abspath(
+            os.path.join("static", "invoices", f"invoice_{sale_id}.pdf")
+        )
+    
+        print("LOOKING FOR INVOICE:", invoice_path)
+    
+        # Ensure file exists
+        if not os.path.isfile(invoice_path):
+            print("❌ FILE NOT FOUND")
+            flash("Invoice PDF does not exist. Regenerate the sale.", "danger")
+            return redirect("/sales")
+    
+        try:
+            print("✅ FILE FOUND, SENDING...")
+            return send_file(
+                invoice_path,
+                mimetype="application/pdf",
+                as_attachment=False
+            )
+    
+        except Exception as e:
+            print("❌ ERROR SENDING FILE:", str(e))
+            abort(500)  
 
     # -------------------------
     # UPLOADS (Serve files)

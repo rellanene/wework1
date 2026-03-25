@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Invoice #56</title>
+
+    <style>
+        html, body {
+            background: #ffffff !important;
+            color: #000000 !important;
+            font-family: 'Segoe UI', sans-serif;
+            padding: 40px;
+        }
+
+        @page {
+            background: #ffffff !important;
+        }
+
+        .invoice-container {
+            background: #ffffff !important;
+            border: 1px solid #ddd;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 800px;
+            margin: auto;
+        }
+
+        h1, h2, h3 {
+            color: #d4af37;
+            margin-bottom: 5px;
+        }
+
+        .header-section {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .info-box {
+            margin-bottom: 25px;
+            padding: 15px;
+            background: #fafafa;
+            border-radius: 10px;
+            border: 1px solid #e5e5e5;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .info-label {
+            color: #555;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 25px;
+        }
+
+        th {
+            background: #f2f2f2;
+            color: #000;
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .totals-box {
+            margin-top: 25px;
+            padding: 20px;
+            background: #fafafa;
+            border-radius: 10px;
+            border: 1px solid #e5e5e5;
+            font-size: 16px;
+        }
+
+        .totals-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            color: #777;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="invoice-container">
+
+    <div class="header-section">
+        <h1>INVOICE</h1>
+        <h3>#56</h3>
+    </div>
+
+    <div class="info-box">
+        <div class="info-row">
+            <span class="info-label">Date:</span>
+            <span>2026-03-24 23:05:08</span>
+        </div>
+
+        <div class="info-row">
+            <span class="info-label">Customer:</span>
+            <span>Walk-in Customer</span>
+        </div>
+
+        <div class="info-row">
+            <span class="info-label">Store:</span>
+            <span>storage 1</span>
+        </div>
+
+        <div class="info-row">
+            <span class="info-label">Cashier:</span>
+            <span>rella</span>
+        </div>
+    </div>
+
+    <h3>Items</h3>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Product</th>
+                <th>Qty</th>
+                <th>Price (R)</th>
+                <th>Total (R)</th>
+            </tr>
+        </thead>
+        <tbody>
+            
+            <tr>
+                <td>Computer Mouse </td>
+                <td>1</td>
+                <td>199.99</td>
+                <td>199.99</td>
+            </tr>
+            
+            <tr>
+                <td>WD Green2</td>
+                <td>2</td>
+                <td>999.00</td>
+                <td>1998.00</td>
+            </tr>
+            
+            <tr>
+                <td>laptop stand</td>
+                <td>1</td>
+                <td>120.00</td>
+                <td>120.00</td>
+            </tr>
+            
+        </tbody>
+    </table>
+
+    <div class="totals-box">
+        <div class="totals-row">
+            <span>Subtotal:</span>
+            <strong>R 2317.99</strong>
+        </div>
+
+        <div class="totals-row">
+            <span>VAT (15%):</span>
+            <strong>R 347.70</strong>
+        </div>
+
+        <div class="totals-row" style="font-size: 20px;">
+            <span><strong>Total Amount:</strong></span>
+            <strong>R 2665.69</strong>
+        </div>
+    </div>
+
+    <div class="footer">
+        Thank you for your purchase.<br>
+        Powered by your Luxury Retail System.
+    </div>
+
+</div>
+
+</body>
+</html>

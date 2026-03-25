@@ -14,13 +14,14 @@
             <!-- Calendar Date -->
             <div class="filter-item">
                 <label>Select Date</label>
-                <input type="date" name="date">
+                <input type="date" name="date" value="{{ request.args.get('date', '') }}">
             </div>
 
             <!-- Manual Date -->
             <div class="filter-item">
                 <label>Type Date (YYYY-MM-DD)</label>
-                <input type="text" name="typed_date" placeholder="2025-01-15">
+                <input type="text" name="typed_date" placeholder="2025-01-15"
+                       value="{{ request.args.get('typed_date', '') }}">
             </div>
 
             <!-- Product Name -->
@@ -29,7 +30,10 @@
                 <select name="product_name">
                     <option value="">All Products</option>
                     {% for p in products %}
-                        <option value="{{ p.name }}">{{ p.name }}</option>
+                        <option value="{{ p.name }}"
+                            {% if request.args.get('product_name') == p.name %}selected{% endif %}>
+                            {{ p.name }}
+                        </option>
                     {% endfor %}
                 </select>
             </div>
@@ -54,7 +58,7 @@
                 <th>Qty</th>
                 <th>From</th>
                 <th>To</th>
-				<th>Invoice</th>
+                <th>Invoice</th>
             </tr>
         </thead>
         <tbody>
@@ -66,9 +70,14 @@
                 <td>{{ m.quantity }}</td>
                 <td>{{ m.from_store_name or "-" }}</td>
                 <td>{{ m.to_store_name or "-" }}</td>
-				<td>
-				    <a href="{{ m.file_path }}" target="_blank">View Invoice</a>
-				</td>
+
+                <td>
+                    {% if m.sale_id %}
+                        <a href="/invoice/{{ m.sale_id }}" target="_blank">View Invoice</a>
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
         </tbody>

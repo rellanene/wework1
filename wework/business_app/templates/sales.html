@@ -13,12 +13,12 @@
 
             <div class="filter-item">
                 <label>Start Date</label>
-                <input type="date" name="start_date">
+                <input type="date" name="start_date" value="{{ request.args.get('start_date','') }}">
             </div>
 
             <div class="filter-item">
                 <label>End Date</label>
-                <input type="date" name="end_date">
+                <input type="date" name="end_date" value="{{ request.args.get('end_date','') }}">
             </div>
 
             <div class="filter-item">
@@ -26,7 +26,10 @@
                 <select name="product_name">
                     <option value="">All Products</option>
                     {% for p in products %}
-                        <option value="{{ p.name }}">{{ p.name }}</option>
+                        <option value="{{ p.name }}"
+                        {% if request.args.get('product_name') == p.name %}selected{% endif %}>
+                        {{ p.name }}
+                        </option>
                     {% endfor %}
                 </select>
             </div>
@@ -39,35 +42,34 @@
     </form>
 </div>
 
-<!-- SALES ENTRY CARD -->
+<!-- SALES ENTRY -->
 <div class="card">
     <h3>Record Sale</h3>
 
-    <!-- Scan Buttons -->
+    <!-- SCANNER BUTTONS -->
     <button type="button" id="startBtn" class="btn-primary" onclick="startScan()">Start Scanning</button>
     <button type="button" id="stopBtn" class="btn-primary"
         style="background:#444; margin-left:10px; opacity:0.4; pointer-events:none;"
         onclick="stopScan()">Stop Scanning</button>
 
-    <!-- USB Scanner Input -->
-    <label style="margin-top: 20px;">Scan Barcode (USB Scanner)</label>
+    <!-- BARCODE INPUT -->
+    <label style="margin-top: 20px;">Scan Barcode</label>
     <input type="text" id="barcode_input" placeholder="Scan barcode here">
 
-    <!-- Live Camera Preview -->
-    <div id="scanner" style="display:none; margin-top:10px; border:1px solid #333; padding:10px; border-radius:10px;">
-        <p style="margin-bottom:8px; color:var(--lux-gold); font-weight:bold;">Camera Preview</p>
+    <!-- CAMERA -->
+    <div id="scanner" style="display:none; margin-top:10px;">
         <video id="preview" style="width:100%; border-radius:10px;"></video>
     </div>
 
-    <!-- MULTI‑ITEM SALES FORM -->
-    <form id="saleForm" action="/record_sale" method="post" style="margin-top: 25px;">
+    <!-- FORM -->
+    <form id="saleForm" action="/record_sale" method="post" style="margin-top: 20px;">
 
-        <table class="table" id="itemsTable">
+        <table class="table">
             <thead>
                 <tr>
                     <th>Product</th>
                     <th>Qty</th>
-                    <th>Price (auto)</th>
+                    <th>Price</th>
                     <th>Total</th>
                     <th></th>
                 </tr>
@@ -77,14 +79,17 @@
                 <tr class="item-row">
                     <td>
                         <select name="product_id[]" class="product-select" required>
+                            <option value="">Select Product</option>
                             {% for p in products %}
-                            <option value="{{ p.id }}" data-price="{{ p.price }}">{{ p.name }}</option>
+                            <option value="{{ p.id }}" data-price="{{ p.price }}">
+                                {{ p.name }}
+                            </option>
                             {% endfor %}
                         </select>
                     </td>
 
                     <td>
-                        <input type="number" name="quantity[]" class="qty-input" value="1" min="1" required>
+                        <input type="number" name="quantity[]" class="qty-input" value="1" min="1">
                     </td>
 
                     <td>
@@ -104,7 +109,9 @@
 
         <button type="button" class="btn-primary" id="addRowBtn">+ Add Item</button>
 
-        <label>Customer (optional)</label>
+        <br><br>
+
+        <label>Customer</label>
         <select name="customer_id">
             <option value="">-- None --</option>
             {% for c in customers %}
@@ -119,7 +126,9 @@
             {% endfor %}
         </select>
 
-        <div style="margin-top: 20px; display:flex; gap:10px;">
+        <br><br>
+
+        <div style="display:flex; gap:10px;">
             <button type="submit" class="btn-primary">Record Sale</button>
 
             <button type="button" class="btn-primary" style="background:#2a7;" onclick="recordAndPrint()">
@@ -136,14 +145,17 @@
     <table class="table">
         <thead>
             <tr>
-                <th>#</th><th>Customer</th><th>Total Amount</th><th>Date</th>
+                <th>#</th>
+                <th>Customer</th>
+                <th>Total</th>
+                <th>Date</th>
             </tr>
         </thead>
         <tbody>
             {% for s in sales %}
             <tr>
                 <td>{{ s.id }}</td>
-                <td>{{ s.customer_id if s.customer_id else '-' }}</td>
+                <td>{{ s.customer_name or '-' }}</td>
                 <td>R {{ "%.2f"|format(s.total_amount) }}</td>
                 <td>{{ s.created_at }}</td>
             </tr>
@@ -152,63 +164,71 @@
     </table>
 </div>
 
-<!-- MULTI‑ITEM SALES SCRIPT -->
+<!-- JS -->
 <script>
+// UPDATE ROW
 function updateRow(row) {
-    const productSelect = row.querySelector(".product-select");
-    const qtyInput = row.querySelector(".qty-input");
-    const priceDisplay = row.querySelector(".price-display");
-    const lineTotal = row.querySelector(".line-total");
+    const product = row.querySelector(".product-select");
+    const qty = row.querySelector(".qty-input");
 
-    const price = parseFloat(productSelect.selectedOptions[0].dataset.price);
-    const qty = parseInt(qtyInput.value);
+    if (!product.value) return;
 
-    priceDisplay.value = "R " + price.toFixed(2);
-    lineTotal.value = "R " + (price * qty).toFixed(2);
+    const price = parseFloat(product.selectedOptions[0].dataset.price || 0);
+    const quantity = parseInt(qty.value || 0);
+
+    row.querySelector(".price-display").value = "R " + price.toFixed(2);
+    row.querySelector(".line-total").value = "R " + (price * quantity).toFixed(2);
 }
 
-function attachRowEvents(row) {
+// EVENTS
+function attachEvents(row) {
     row.querySelector(".product-select").addEventListener("change", () => updateRow(row));
     row.querySelector(".qty-input").addEventListener("input", () => updateRow(row));
+
     row.querySelector(".remove-row").addEventListener("click", () => {
-        if (document.querySelectorAll(".item-row").length > 1) {
-            row.remove();
-        }
+        if (document.querySelectorAll(".item-row").length > 1) row.remove();
+    });
+}
+
+// INIT
+document.querySelectorAll(".item-row").forEach(attachEvents);
+
+// ADD ROW
+document.getElementById("addRowBtn").addEventListener("click", () => {
+    const body = document.getElementById("itemsBody");
+    const newRow = body.querySelector(".item-row").cloneNode(true);
+
+    newRow.querySelector(".product-select").selectedIndex = 0;
+    newRow.querySelector(".qty-input").value = 1;
+    newRow.querySelector(".price-display").value = "";
+    newRow.querySelector(".line-total").value = "";
+
+    attachEvents(newRow);
+    body.appendChild(newRow);
+});
+
+// VALIDATE
+document.getElementById("saleForm").addEventListener("submit", function(e) {
+    let valid = false;
+
+    document.querySelectorAll(".item-row").forEach(row => {
+        const product = row.querySelector(".product-select").value;
+        const qty = row.querySelector(".qty-input").value;
+
+        if (product && qty > 0) valid = true;
     });
 
-    updateRow(row);
-}
-
-document.querySelectorAll(".item-row").forEach(attachRowEvents);
-
-document.getElementById("addRowBtn").addEventListener("click", () => {
-    const tableBody = document.getElementById("itemsBody");
-    const newRow = tableBody.querySelector(".item-row").cloneNode(true);
-
-    newRow.querySelector(".qty-input").value = 1;
-    attachRowEvents(newRow);
-
-    tableBody.appendChild(newRow);
+    if (!valid) {
+        e.preventDefault();
+        alert("Add at least one product");
+    }
 });
-</script>
 
-<!-- PRINT SCRIPT -->
-<script>
+// PRINT
 function recordAndPrint() {
-    const form = document.getElementById("saleForm");
-    form.action = "/record_sale";
-    form.submit();
-
-    setTimeout(() => {
-        window.print();
-    }, 500);
+    document.getElementById("saleForm").submit();
+    setTimeout(() => window.print(), 500);
 }
-</script>
-
-<!-- SCANNING ENGINE -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
-<script>
-    // your scanning code stays unchanged
 </script>
 
 {% endblock %}

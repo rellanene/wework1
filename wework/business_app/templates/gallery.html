@@ -16,7 +16,7 @@
     {% for f in files %}
         <div class="gallery-item">
 
-            {% set path = f.file_path if f.file_path else '/static/uploads/' ~ f.filename %}
+            {% set path = f.file_path if f.file_path else '/static/invoices/' ~ f.filename %}
 
             {% if f.filename.lower().endswith('.pdf') %}
                 <!-- PDF Preview -->
