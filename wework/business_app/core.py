@@ -681,19 +681,37 @@ def create_app():
         business_id = session["user"]["business_id"]
         db = get_db()
         cursor = db.cursor(dictionary=True)
-
-    # -------------------------
-    # SALES CALCULATIONS
-    # -------------------------
-        cursor.execute("""
+    
+        # -------------------------
+        # FILTERS
+        # -------------------------
+        start_date = request.args.get("start_date")
+        end_date = request.args.get("end_date")
+    
+        # -------------------------
+        # SALES CALCULATIONS (with date filters)
+        # -------------------------
+        sales_query = """
             SELECT IFNULL(SUM(total_amount),0) AS total_sales,
                    COUNT(*) AS total_units,
                    IFNULL(AVG(total_amount),0) AS avg_sale_value
             FROM sales
             WHERE business_id=%s
-        """, (business_id,))
+        """
+    
+        params = [business_id]
+    
+        if start_date:
+            sales_query += " AND DATE(created_at) >= %s"
+            params.append(start_date)
+    
+        if end_date:
+            sales_query += " AND DATE(created_at) <= %s"
+            params.append(end_date)
+    
+        cursor.execute(sales_query, params)
         sales_stats = cursor.fetchone()
-
+    
         # -------------------------
         # PROFIT MARGINS
         # -------------------------
@@ -703,15 +721,15 @@ def create_app():
             WHERE business_id=%s
         """, (business_id,))
         rows = cursor.fetchall()
-        
+    
         margins = []
         for r in rows:
             price = r["price"] or 0
             wholesale = r["wholesale_price"] or 0
-        
+    
             margin_value = price - wholesale
             margin_percent = (margin_value / wholesale * 100) if wholesale else 0
-        
+    
             margins.append({
                 "name": r["name"],
                 "price": price,
@@ -719,10 +737,10 @@ def create_app():
                 "margin_value": margin_value,
                 "margin_percent": margin_percent
             })
-
-    # -------------------------
-    # STOCK VALUATION
-    # -------------------------
+    
+        # -------------------------
+        # STOCK VALUATION
+        # -------------------------
         cursor.execute("""
             SELECT p.id, p.name, p.price, p.wholesale_price,
                    IFNULL(SUM(i.quantity),0) AS total_quantity
@@ -741,7 +759,7 @@ def create_app():
             wholesale_price = row["wholesale_price"] or 0
             price = row["price"] or 0
             qty = row["total_quantity"] or 0
-
+    
             wholesale_total = qty * wholesale_price
             retail_total = qty * price
     
@@ -754,13 +772,16 @@ def create_app():
                 "wholesale_total": wholesale_total,
                 "retail_total": retail_total
             })
-
-    # -------------------------
-    # PRODUCTS FOR SUPPLIER ORDERING
-    # -------------------------
+    
+        # -------------------------
+        # PRODUCTS FOR SUPPLIER ORDERING
+        # -------------------------
         cursor.execute("SELECT id, name FROM products WHERE business_id=%s", (business_id,))
         products = cursor.fetchall()
     
+        # -------------------------
+        # FINAL DATA PACKAGE
+        # -------------------------
         finances_data = {
             "total_sales": sales_stats["total_sales"],
             "total_units": sales_stats["total_units"],
@@ -772,7 +793,12 @@ def create_app():
             "products": products
         }
     
-        return render_template("finances.html", finances=finances_data)
+        return render_template(
+            "finances.html",
+            finances=finances_data,
+            start_date=start_date,
+            end_date=end_date
+        )
     
     
     @app.route("/visuals", methods=["GET", "POST"])

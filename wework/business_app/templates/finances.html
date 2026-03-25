@@ -5,6 +5,35 @@
 <h1 class="page-title">Finances Dashboard</h1>
 
 <!-- ========================= -->
+<!-- FILTERS (DATE RANGE) -->
+<!-- ========================= -->
+<div class="card mb-4">
+    <h3>Filter by Date</h3>
+
+    <form method="get" action="/finances">
+        <div class="row">
+
+            <div class="col-md-3">
+                <label>Start Date</label>
+                <input type="date" name="start_date" class="form-control"
+                       value="{{ request.args.get('start_date', '') }}">
+            </div>
+
+            <div class="col-md-3">
+                <label>End Date</label>
+                <input type="date" name="end_date" class="form-control"
+                       value="{{ request.args.get('end_date', '') }}">
+            </div>
+
+            <div class="col-md-3 d-flex align-items-end">
+                <button class="btn-primary" type="submit">Apply Filter</button>
+            </div>
+
+        </div>
+    </form>
+</div>
+
+<!-- ========================= -->
 <!-- SALES CALCULATIONS -->
 <!-- ========================= -->
 <div class="card">
