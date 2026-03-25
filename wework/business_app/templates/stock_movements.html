@@ -81,7 +81,14 @@
         </tbody>
     </table>
 </div>
-
+<form method="get" action="/movements/export" class="w-100">
+    {% for key, value in request.args.items() %}
+        <input type="hidden" name="{{ key }}" value="{{ value }}">
+    {% endfor %}
+    <button type="submit" class="btn-primary">
+        Export to Excel
+    </button>
+</form>
 <style>
 .filter-form {
     margin-bottom: 20px;

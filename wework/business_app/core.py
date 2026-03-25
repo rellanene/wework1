@@ -1,11 +1,16 @@
 import os
 import hashlib
+from openpyxl import Workbook
+from flask import send_file
+from io import BytesIO
+from datetime import datetime
 from datetime import date
 from datetime import date, datetime
 from functools import wraps
 from flask import jsonify
 import pdfkit
 from flask import send_file
+
 
 
 
@@ -584,6 +589,82 @@ def create_app():
             products=products,
             movements=movements
         )
+        
+    #--------------MOVEMENT EXPORT-----------
+    @app.route("/movements/export")
+
+    
+    
+    @app.route("/movements/export")
+    @login_required
+    def export_movements():
+        business_id = session["user"]["business_id"]
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        # Filters
+        start_date = request.args.get("start_date")
+        end_date = request.args.get("end_date")
+        product_name = request.args.get("product_name")
+    
+        query = """
+            SELECT sm.id, sm.created_at, p.name AS product_name,
+                   fs.name AS from_store, ts.name AS to_store,
+                   sm.quantity, sm.movement_type
+            FROM stock_movements sm
+            LEFT JOIN products p ON sm.product_id = p.id
+            LEFT JOIN stores fs ON sm.from_store_id = fs.id
+            LEFT JOIN stores ts ON sm.to_store_id = ts.id
+            WHERE sm.business_id = %s
+        """
+    
+        params = [business_id]
+    
+        if start_date:
+            query += " AND DATE(sm.created_at) >= %s"
+            params.append(start_date)
+    
+        if end_date:
+            query += " AND DATE(sm.created_at) <= %s"
+            params.append(end_date)
+    
+        if product_name:
+            query += " AND p.name LIKE %s"
+            params.append(f"%{product_name}%")
+    
+        query += " ORDER BY sm.created_at DESC"
+    
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+    
+        # Create Excel workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Stock Movements"
+    
+        # Header
+        if rows:
+            ws.append(list(rows[0].keys()))
+    
+        # Rows
+        for row in rows:
+            ws.append(list(row.values()))
+    
+        # Save to memory
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+    
+        # Unique filename with seconds
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        filename = f"stock_movements_{timestamp}.xlsx"
+    
+        return send_file(
+            output,
+            download_name=filename,
+            as_attachment=True,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )    
     # -------------------------
     # CUSTOMERS
     # -------------------------
