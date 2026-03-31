@@ -268,31 +268,30 @@ function startScan() {
         Quagga.start();
     });
 
-    Quagga.onDetected(async function(result) {
-        let now = Date.now();
-        if (now - lastScan < 1000) return; // prevent double scans
-        lastScan = now;
+	Quagga.onDetected(async function(result) {
+	    let now = Date.now();
+	    if (now - lastScan < 1000) return; // prevent double scans
+	    lastScan = now;
 
-        enableStopButton();
+	    enableStopButton();
 
-        let code = result.codeResult.code;
-        document.getElementById("barcode_input").value = code;
+	    let code = result.codeResult.code;
+	    document.getElementById("barcode_input").value = code;
 
-        // CHECK PRODUCT IN DATABASE
-        const response = await fetch(`/check_barcode?code=${code}`);
-        const data = await response.json();
+	    // CHECK PRODUCT IN DATABASE
+	    const response = await fetch(`/check_barcode?code=${code}`);
+	    const data = await response.json();
 
-        if (!data.found) {
-            alert("Product not found in database");
-            stopScan();
-            return;
-        }
+	    if (!data.found) {
+	        alert("Product not found in database");
+	        return; // ❗ DO NOT STOP SCANNER
+	    }
 
-        // AUTO-ADD PRODUCT TO SALE FORM
-        addScannedProduct(data);
+	    // AUTO-ADD PRODUCT TO SALE FORM
+	    addScannedProduct(data);
 
-        stopScan();
-    });
+	    // ❗ DO NOT STOP SCANNER HERE
+	});
 }
 
 function stopScan() {
@@ -306,21 +305,42 @@ function stopScan() {
 --------------------------------*/
 function addScannedProduct(product) {
     const body = document.getElementById("itemsBody");
+    const rows = body.querySelectorAll(".item-row");
 
-    // Create a new row
-    const newRow = body.querySelector(".item-row").cloneNode(true);
+    // 1️⃣ CHECK IF PRODUCT ALREADY EXISTS IN THE LIST
+    for (let row of rows) {
+        const select = row.querySelector(".product-select");
+
+        if (select.value == product.id) {
+            // Increase quantity
+            const qtyInput = row.querySelector(".qty-input");
+            qtyInput.value = parseInt(qtyInput.value) + 1;
+
+            // Update totals
+            updateRow(row);
+
+            return; // STOP — do not add a new row
+        }
+    }
+
+    // 2️⃣ IF PRODUCT DOES NOT EXIST → ADD NEW ROW
+    const newRow = rows[0].cloneNode(true);
 
     // Set product
-    newRow.querySelector(".product-select").value = product.id;
+    const select = newRow.querySelector(".product-select");
+    select.value = product.id;
 
     // Set quantity
-    newRow.querySelector(".qty-input").value = 1;
+    const qty = newRow.querySelector(".qty-input");
+    qty.value = 1;
 
-    // Set price + total
-    newRow.querySelector(".price-display").value = "R " + product.price.toFixed(2);
-    newRow.querySelector(".line-total").value = "R " + product.price.toFixed(2);
+    // Update totals
+    updateRow(newRow);
 
+    // Reattach events
     attachEvents(newRow);
+
+    // Add row to table
     body.appendChild(newRow);
 }
 
