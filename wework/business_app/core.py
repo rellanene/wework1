@@ -1109,6 +1109,34 @@ def create_app():
             print("SALE ERROR:", str(e))
             flash(str(e), "danger")
             return redirect("/sales")
+        
+    #--------------SALE SCANNER---------------
+    @app.route("/check_barcode")
+    @login_required
+    def check_barcode():
+        code = request.args.get("code")
+        business_id = session["user"]["business_id"]
+    
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("""
+            SELECT id, name, price
+            FROM products
+            WHERE barcode = %s AND business_id = %s
+        """, (code, business_id))
+    
+        product = cursor.fetchone()
+    
+        if not product:
+            return {"found": False}
+    
+        return {
+            "found": True,
+            "id": product["id"],
+            "name": product["name"],
+            "price": product["price"]
+        }    
 
 
     # -------------------------
