@@ -71,7 +71,30 @@
 
                 <td>
                     {% if m.sale_id %}
-                        <a href="/invoice/{{ m.sale_id }}" target="_blank">View Invoice</a>
+					<div style="display:flex; gap:8px; align-items:center;">
+
+					    <!-- VIEW INVOICE -->
+					    <a href="/invoice/{{ m.sale_id }}" class="btn-primary" target="_blank">
+					        View Invoice
+					    </a>
+
+					    <!-- EMAIL BUTTON -->
+					    <a href="mailto:{{ m.customer_email }}?subject=Invoice%20for%20Sale%20{{ m.id }}&body=Dear%20{{ m.customer_name }},%0D%0A%0D%0AThank%20you%20for%20your%20purchase.%20Attached%20is%20your%20invoice.%0D%0A%0D%0ARegards,%0D%0A{{ cashier_name }}"
+					       class="btn-primary"
+					       style="background:#0078D4;"
+					       target="_blank">
+					        Email
+					    </a>
+
+					    <!-- WHATSAPP BUTTON -->
+					    <a href="https://wa.me/{{ m.customer_phone }}?text=Hello%20{{ m.customer_name }},%0AThank%20you%20for%20your%20purchase.%20Your%20invoice%20number%20is%20{{ m.id }}."
+					       class="btn-primary"
+					       style="background:#25D366;"
+					       target="_blank">
+					        WhatsApp
+					    </a>
+
+					</div>
                     {% else %}
                         -
                     {% endif %}
