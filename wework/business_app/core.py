@@ -10,6 +10,7 @@ from functools import wraps
 from flask import jsonify
 import pdfkit
 from flask import send_file
+import json
 
 
 
@@ -511,6 +512,134 @@ def create_app():
             stores=stores_list,
             sales=sales_list
         )
+        
+    #------------Load POS----------
+    @app.route("/pos_page")
+    @login_required
+    def pos_page():
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        business_id = session["user"]["business_id"]
+    
+        cursor.execute("""
+            SELECT id, name, price 
+            FROM products 
+            WHERE business_id = %s
+            ORDER BY name ASC
+        """, (business_id,))
+        products = cursor.fetchall()
+    
+        return render_template("POS.html", products=products) 
+    
+    #----------Process POS----------
+    @app.route("/pos_process_sale", methods=["POST"])
+    @login_required
+    def pos_process_sale():
+        import json
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        try:
+            # -------------------------
+            # CART
+            # -------------------------
+            cart_json = request.form.get("cart_data")
+            if not cart_json:
+                raise Exception("Cart is empty")
+    
+            cart = json.loads(cart_json)
+            if len(cart) == 0:
+                raise Exception("Cart is empty")
+    
+            # -------------------------
+            # PAYMENT DETAILS
+            # -------------------------
+            payment_method = request.form.get("payment_method")
+            amount_paid = float(request.form.get("amount_paid") or 0)
+            change_due = request.form.get("change_due") or "0"
+    
+            # -------------------------
+            # BUSINESS + STORE
+            # -------------------------
+            business_id = session["user"]["business_id"]
+            store_id = session["user"].get("store_id", None)
+    
+            # -------------------------
+            # TOTALS
+            # -------------------------
+            subtotal = sum(item["price"] * item["qty"] for item in cart)
+            vat_amount = subtotal * 0.15
+            total_amount = subtotal + vat_amount
+    
+            # -------------------------
+            # INSERT SALE
+            # -------------------------
+            cursor.execute("""
+                INSERT INTO sales (business_id, store_id, subtotal, vat_amount, total_amount, payment_method)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (business_id, store_id, subtotal, vat_amount, total_amount, payment_method))
+            db.commit()
+    
+            sale_id = cursor.lastrowid
+    
+            # -------------------------
+            # INSERT ITEMS
+            # -------------------------
+            for item in cart:
+                line_total = item["price"] * item["qty"]
+    
+                cursor.execute("""
+                    INSERT INTO sale_items (sale_id, product_id, quantity, price, line_total)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (sale_id, item["id"], item["qty"], item["price"], line_total))
+    
+            db.commit()
+    
+            return redirect(f"/pos_invoice/{sale_id}")
+    
+        except Exception as e:
+            db.rollback()
+            print("POS ERROR:", e)
+            flash(str(e), "danger")
+            return redirect("/pos_page")
+        
+    #------------POS Invoice---------
+    @app.route("/pos_invoice/<int:sale_id>")
+    @login_required
+    def pos_invoice(sale_id):
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("""
+            SELECT s.*, 
+                   st.name AS store_name
+            FROM sales s
+            LEFT JOIN stores st ON s.store_id = st.id
+            WHERE s.id = %s
+        """, (sale_id,))
+        sale = cursor.fetchone()
+    
+        cursor.execute("""
+            SELECT si.*, p.name AS product_name
+            FROM sale_items si
+            JOIN products p ON si.product_id = p.id
+            WHERE si.sale_id = %s
+        """, (sale_id,))
+        items = cursor.fetchall()
+    
+        cashier_name = session["user"]["name"]
+    
+        return render_template(
+            "invoice.html",
+            sale_id=sale_id,
+            sale=sale,
+            items=items,
+            subtotal=sale["subtotal"],
+            vat_amount=sale["vat_amount"],
+            total_amount=sale["total_amount"],
+            cashier_name=cashier_name
+        )   
 
     # -------------------------
     # STOCK MOVEMENTS HISTORY (optional view)
@@ -1136,7 +1265,59 @@ def create_app():
             "id": product["id"],
             "name": product["name"],
             "price": product["price"]
-        }    
+        }
+        
+    from decimal import Decimal
+
+    @app.route("/invoice/<int:sale_id>")
+    def invoice(sale_id):
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        # 1. GET SALE + CUSTOMER NAME
+        cursor.execute("""
+            SELECT s.*, 
+                   c.name AS customer_name,
+                   c.email AS customer_email,
+                   c.phone AS customer_phone
+            FROM sales s
+            LEFT JOIN customers c ON s.customer_id = c.id
+            WHERE s.id = %s
+        """, (sale_id,))
+        sale = cursor.fetchone()
+    
+        # 2. GET SALE ITEMS
+        cursor.execute("""
+            SELECT si.*, p.name AS product_name
+            FROM sale_items si
+            JOIN products p ON si.product_id = p.id
+            WHERE si.sale_id = %s
+        """, (sale_id,))
+        items = cursor.fetchall()
+    
+        # 3. GET STORE NAME
+        cursor.execute("SELECT name FROM stores WHERE id = %s", (sale["store_id"],))
+        business_name = cursor.fetchone()["name"]
+    
+        # 4. GET CASHIER NAME FROM PROFILE (SESSION)
+        cashier_name = session["user"]["name"]
+    
+        # 5. TOTALS (Decimal-safe)
+        subtotal = sum(Decimal(item["price"]) * Decimal(item["quantity"]) for item in items)
+        vat_amount = subtotal * Decimal("0.15")
+        total_amount = subtotal + vat_amount
+    
+        return render_template(
+            "invoice.html",
+            sale_id=sale_id,
+            sale=sale,
+            items=items,
+            subtotal=subtotal,
+            vat_amount=vat_amount,
+            total_amount=total_amount,
+            business_name=business_name,
+            cashier_name=cashier_name
+        )    
 
 
     # -------------------------
@@ -1162,17 +1343,11 @@ def create_app():
         flash("Supplier order placed successfully!", "success")
         return redirect(url_for("finances"))
     
-    #-------------Generate Invoice-----------
-
-
+    
     from flask import render_template
+    from decimal import Decimal
     
     def generate_invoice_for_sale(sale_id, sale_data):
-        """
-        Generates a PDF invoice and saves it to disk,
-        then records it in the gallery table.
-        """
-    
         try:
             # -------------------------
             # WKHTMLTOPDF SETUP
@@ -1195,26 +1370,58 @@ def create_app():
             output_path = os.path.join(invoices_folder, filename)
     
             # -------------------------
-            # VALIDATE SALE DATA
+            # FETCH FULL SALE DATA (same as View Invoice)
             # -------------------------
-            if not sale_data:
-                raise Exception("Sale data is missing")
+            db = get_db()
+            cursor = db.cursor(dictionary=True)
     
-            if "business_id" not in sale_data:
-                raise Exception("business_id missing in sale_data")
+            # 1. SALE + CUSTOMER
+            cursor.execute("""
+                SELECT s.*,
+                       c.name AS customer_name,
+                       c.email AS customer_email,
+                       c.phone AS customer_phone
+                FROM sales s
+                LEFT JOIN customers c ON s.customer_id = c.id
+                WHERE s.id = %s
+            """, (sale_id,))
+            sale = cursor.fetchone()
+    
+            # 2. ITEMS
+            cursor.execute("""
+                SELECT si.*, p.name AS product_name
+                FROM sale_items si
+                JOIN products p ON si.product_id = p.id
+                WHERE si.sale_id = %s
+            """, (sale_id,))
+            items = cursor.fetchall()
+    
+            # 3. STORE NAME
+            cursor.execute("SELECT name FROM stores WHERE id = %s", (sale["store_id"],))
+            store_row = cursor.fetchone()
+            business_name = store_row["name"] if store_row else "Unknown Store"
+    
+            # 4. CASHIER NAME
+            cashier_name = session["user"]["name"]
+    
+            # 5. TOTALS
+            subtotal = sum(Decimal(i["price"]) * Decimal(i["quantity"]) for i in items)
+            vat_amount = subtotal * Decimal("0.15")
+            total_amount = subtotal + vat_amount
     
             # -------------------------
-            # RENDER HTML
+            # RENDER HTML (IDENTICAL TO VIEW INVOICE)
             # -------------------------
             html = render_template(
                 "invoice.html",
                 sale_id=sale_id,
-                sale=sale_data,
-                items=sale_data.get("items", []),
-                subtotal=sale_data.get("subtotal", 0),
-                vat_amount=sale_data.get("vat_amount", 0),
-                total_amount=sale_data.get("total_amount", 0),
-                cashier_name=sale_data.get("cashier_name", "N/A")
+                sale=sale,
+                items=items,
+                subtotal=subtotal,
+                vat_amount=vat_amount,
+                total_amount=total_amount,
+                business_name=business_name,
+                cashier_name=cashier_name
             )
     
             # -------------------------
@@ -1225,18 +1432,13 @@ def create_app():
             print("✅ Invoice generated:", output_path)
     
             # -------------------------
-            # SAVE TO GALLERY (OPTION A)
+            # SAVE TO GALLERY
             # -------------------------
-            db = get_db()
             cursor = db.cursor()
-    
             cursor.execute("""
                 INSERT INTO gallery (business_id, filename)
                 VALUES (%s, %s)
-            """, (
-                sale_data["business_id"],
-                filename
-            ))
+            """, (sale["business_id"], filename))
     
             db.commit()
     
@@ -1247,6 +1449,8 @@ def create_app():
         except Exception as e:
             print("❌ ERROR GENERATING INVOICE:", str(e))
             raise
+    
+   
     #--------------View Invoice-----------
     @app.route("/invoice/<int:sale_id>")
     @login_required

@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block title %}Point of Sale{% endblock %}
+
+{% block content %}
+
+<style>
+    .pos-wrapper {
+        display: flex;
+        gap: 20px;
+        margin-top: 20px;
+    }
+
+    .pos-panel {
+        background: #ffffff;
+        padding: 20px;
+        border-radius: 12px;
+        border: 1px solid #ddd;
+        flex: 1;
+    }
+
+    .products-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 15px;
+    }
+
+    .product-card {
+        padding: 15px;
+        border: 1px solid #ccc;
+        border-radius: 10px;
+        text-align: center;
+        cursor: pointer;
+        background: #fafafa;
+        transition: 0.2s;
+    }
+
+    .product-card:hover {
+        background: #f0f0f0;
+    }
+
+    .cart-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .cart-table th, .cart-table td {
+        padding: 10px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .checkout-box {
+        margin-top: 20px;
+        padding: 15px;
+        background: #fafafa;
+        border-radius: 10px;
+        border: 1px solid #ddd;
+    }
+
+    .btn {
+        padding: 10px 15px;
+        border-radius: 6px;
+        border: none;
+        cursor: pointer;
+        color: white;
+    }
+
+    .btn-checkout {
+        background: #28a745;
+        width: 100%;
+        font-size: 18px;
+    }
+
+    .btn-remove {
+        background: #dc3545;
+        padding: 5px 10px;
+    }
+</style>
+
+<h2>Point of Sale</h2>
+
+<div class="pos-wrapper">
+
+    <!-- PRODUCTS PANEL -->
+    <div class="pos-panel">
+        <h3>Products</h3>
+
+        <div class="products-grid">
+            {% for p in products %}
+            <div class="product-card" onclick="addToCart({{ p.id }}, '{{ p.name }}', {{ p.price }})">
+                <strong>{{ p.name }}</strong><br>
+                <span>R {{ "%.2f"|format(p.price) }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- CART PANEL -->
+    <div class="pos-panel">
+        <h3>Cart</h3>
+
+        <table class="cart-table" id="cartTable">
+            <thead>
+                <tr>
+                    <th>Product</th>
+                    <th>Qty</th>
+                    <th>Price</th>
+                    <th>Total</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="cartBody"></tbody>
+        </table>
+
+        <div class="checkout-box">
+            <div style="display:flex; justify-content:space-between;">
+                <span>Subtotal:</span>
+                <strong id="subtotal">R 0.00</strong>
+            </div>
+
+            <div style="display:flex; justify-content:space-between;">
+                <span>VAT (15%):</span>
+                <strong id="vat">R 0.00</strong>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; font-size:20px;">
+                <span><strong>Total:</strong></span>
+                <strong id="total">R 0.00</strong>
+            </div>
+
+            <br>
+
+            <form method="POST" action="/pos_process_sale">
+                <input type="hidden" name="cart_data" id="cartData">
+                <div class="checkout-box">
+
+    <label><strong>Payment Method</strong></label>
+    <select id="paymentMethod" name="payment_method" class="form-control" onchange="toggleCashFields()">
+        <option value="Cash">Cash</option>
+        <option value="Card">Card</option>
+        <option value="EFT">EFT</option>
+    </select>
+
+    <div id="cashFields" style="margin-top:15px;">
+        <label>Amount Paid</label>
+        <input type="number" step="0.01" id="amountPaid" class="form-control" oninput="calculateChange()">
+
+        <label>Change</label>
+        <input type="text" id="changeDue" class="form-control" readonly>
+    </div>
+
+    <br>
+
+    <form method="POST" action="/pos_process_sale" onsubmit="preparePOSSubmit()">
+        <input type="hidden" name="cart_data" id="cartData">
+        <input type="hidden" name="payment_method" id="paymentMethodField">
+        <input type="hidden" name="amount_paid" id="amountPaidField">
+        <input type="hidden" name="change_due" id="changeDueField">
+
+        <button class="btn btn-checkout">Complete Sale</button>
+    </form>
+</div>
+                <button class="btn btn-checkout">Complete Sale</button>
+            </form>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    let cart = [];
+
+    function addToCart(id, name, price) {
+        let item = cart.find(i => i.id === id);
+
+        if (item) {
+            item.qty += 1;
+        } else {
+            cart.push({ id, name, price, qty: 1 });
+        }
+
+        renderCart();
+    }
+
+    function removeItem(id) {
+        cart = cart.filter(i => i.id !== id);
+        renderCart();
+    }
+
+    function renderCart() {
+        let tbody = document.getElementById("cartBody");
+        tbody.innerHTML = "";
+
+        let subtotal = 0;
+
+        cart.forEach(item => {
+            let total = item.price * item.qty;
+            subtotal += total;
+
+            tbody.innerHTML += `
+                <tr>
+                    <td>${item.name}</td>
+                    <td>${item.qty}</td>
+                    <td>R ${item.price.toFixed(2)}</td>
+                    <td>R ${total.toFixed(2)}</td>
+                    <td><button class="btn btn-remove" onclick="removeItem(${item.id})">X</button></td>
+                </tr>
+            `;
+        });
+
+        let vat = subtotal * 0.15;
+        let total = subtotal + vat;
+
+        document.getElementById("subtotal").innerText = "R " + subtotal.toFixed(2);
+        document.getElementById("vat").innerText = "R " + vat.toFixed(2);
+        document.getElementById("total").innerText = "R " + total.toFixed(2);
+
+        document.getElementById("cartData").value = JSON.stringify(cart);
+    }
+</script>
+<script>
+function toggleCashFields() {
+    let method = document.getElementById("paymentMethod").value;
+    document.getElementById("cashFields").style.display = (method === "Cash") ? "block" : "none";
+}
+
+function calculateChange() {
+    let total = parseFloat(document.getElementById("total").innerText.replace("R ", ""));
+    let paid = parseFloat(document.getElementById("amountPaid").value || 0);
+    let change = paid - total;
+
+    document.getElementById("changeDue").value = "R " + change.toFixed(2);
+}
+
+function preparePOSSubmit() {
+    document.getElementById("paymentMethodField").value = document.getElementById("paymentMethod").value;
+    document.getElementById("amountPaidField").value = document.getElementById("amountPaid").value || 0;
+    document.getElementById("changeDueField").value = document.getElementById("changeDue").value || "0";
+}
+</script>
+
+{% endblock %}
