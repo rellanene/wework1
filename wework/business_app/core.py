@@ -943,29 +943,25 @@ def create_app():
     #--------------MAIN SETTINGS PAGE ROUTE
     @app.route("/settings")
     @login_required
-    def settings():
+    def settings_page():
         db = get_db()
         cursor = db.cursor(dictionary=True)
     
-        business_id = session["user"]["business_id"]
-    
-        # Load all users for permissions dropdown
+        # ⭐ Do NOT load the owner
         cursor.execute("""
-            SELECT id, name, role 
-            FROM users 
-            WHERE business_id = %s
-        """, (business_id,))
+            SELECT * FROM users 
+            WHERE business_id=%s AND role != 'owner'
+        """, (session["user"]["business_id"],))
         users = cursor.fetchall()
     
-        branding = get_branding(business_id)
-        config = get_config(business_id)
+        cursor.execute("SELECT * FROM branding WHERE business_id=%s", (session["user"]["business_id"],))
+        branding = cursor.fetchone()
     
-        return render_template(
-            "settings.html",
-            users=users,
-            branding=branding,
-            config=config
-        )
+        cursor.execute("SELECT * FROM business_config WHERE business_id=%s", (session["user"]["business_id"],))
+        config = cursor.fetchone()
+    
+        return render_template("settings.html", users=users, branding=branding, config=config)
+
         
      #----------SAVE USER PERMISSIONS
     @app.route("/settings/permissions", methods=["POST"])
