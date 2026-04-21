@@ -1,6 +1,234 @@
 {% extends "base.html" %}
-{% block title %}Settings{% endblock %}
+{% block title %}Settings & Configuration{% endblock %}
+
 {% block content %}
-<h1 class="page-title">Settings</h1>
-<p class="muted">Settings page placeholder – business configuration, branding, permissions can go here.</p>
+
+<style>
+    /* Page Title */
+    .settings-title {
+        font-size: 28px;
+        font-weight: 700;
+        margin-bottom: 25px;
+        color: #1a2b49;
+        letter-spacing: 0.5px;
+    }
+
+    /* Section Card */
+    .settings-section {
+        background: #ffffff;
+        padding: 28px;
+        border-radius: 14px;
+        border: 1px solid #d7dfe9;
+        margin-bottom: 32px;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.06);
+        transition: 0.25s ease;
+    }
+
+    .settings-section:hover {
+        box-shadow: 0 6px 16px rgba(0,0,0,0.10);
+    }
+
+    .settings-section h3 {
+        margin-bottom: 18px;
+        font-size: 20px;
+        font-weight: 600;
+        color: #1a2b49;
+        border-left: 4px solid #c8a24a; /* Gold accent */
+        padding-left: 12px;
+    }
+
+    /* Labels */
+    label {
+        font-weight: 600;
+        margin-top: 10px;
+        display: block;
+        color: #1a2b49;
+    }
+
+    /* Inputs */
+    input, select {
+        width: 100%;
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid #cfd7e6;
+        margin-bottom: 15px;
+        font-size: 14px;
+    }
+
+    input:focus, select:focus {
+        outline: none;
+        border-color: #c8a24a;
+        box-shadow: 0 0 4px rgba(200,162,74,0.4);
+    }
+
+    /* Buttons */
+    .btn-save {
+        background: #1a2b49;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        border: none;
+        font-weight: 600;
+        cursor: pointer;
+        transition: 0.2s ease;
+    }
+
+    .btn-save:hover {
+        background: #152238;
+    }
+</style>
+
+<h2 class="settings-title">Settings & Configuration</h2>
+
+<!-- USER PERMISSIONS -->
+<div class="settings-section">
+    <h3>User Permissions</h3>
+
+    <form method="POST" action="/settings/permissions">
+        <label>Select User</label>
+        <select name="user_id">
+            {% for u in users %}
+                <option value="{{ u.id }}">{{ u.name }} ({{ u.role }})</option>
+            {% endfor %}
+        </select>
+
+        <label>Dashboard Access</label>
+        <select name="can_view_dashboard">
+            <option value="1">Allow</option>
+            <option value="0">Deny</option>
+        </select>
+
+        <label>Products Access</label>
+        <select name="can_view_products">
+            <option value="1">Allow</option>
+            <option value="0">Deny</option>
+        </select>
+
+        <label>Customers Access</label>
+        <select name="can_view_customers">
+            <option value="1">Allow</option>
+            <option value="0">Deny</option>
+        </select>
+
+        <label>Sales Access</label>
+        <select name="can_view_sales">
+            <option value="1">Allow</option>
+            <option value="0">Deny</option>
+        </select>
+
+        <label>POS Access</label>
+        <select name="can_view_pos">
+            <option value="1">Allow</option>
+            <option value="0">Deny</option>
+        </select>
+
+        <label>Finances Access</label>
+        <select name="can_view_finances">
+            <option value="1">Allow</option>
+            <option value="0">Deny</option>
+        </select>
+
+        <label>Reports Access</label>
+        <select name="can_view_reports">
+            <option value="1">Allow</option>
+            <option value="0">Deny</option>
+        </select>
+
+        <label>Visual Dashboard Access</label>
+        <select name="can_view_visuals">
+            <option value="1">Allow</option>
+            <option value="0">Deny</option>
+        </select>
+
+        <label>Stores Access</label>
+        <select name="can_view_stores">
+            <option value="1">Allow</option>
+            <option value="0">Deny</option>
+        </select>
+
+        <label>Stock In Access</label>
+        <select name="can_view_stock_in">
+            <option value="1">Allow</option>
+            <option value="0">Deny</option>
+        </select>
+
+        <label>Stock Transfer Access</label>
+        <select name="can_view_stock_transfer">
+            <option value="1">Allow</option>
+            <option value="0">Deny</option>
+        </select>
+
+        <label>Movements Access</label>
+        <select name="can_view_movements">
+            <option value="1">Allow</option>
+            <option value="0">Deny</option>
+        </select>
+
+        <label>Gallery Access</label>
+        <select name="can_view_gallery">
+            <option value="1">Allow</option>
+            <option value="0">Deny</option>
+        </select>
+
+        <label>Settings Access</label>
+        <select name="can_view_settings">
+            <option value="1">Allow</option>
+            <option value="0">Deny</option>
+        </select>
+
+        <label>Profile Access</label>
+        <select name="can_view_profile">
+            <option value="1">Allow</option>
+            <option value="0">Deny</option>
+        </select>
+
+        <button class="btn-save">Save Permissions</button>
+    </form>
+</div>
+
+<!-- BRANDING -->
+<div class="settings-section">
+    <h3>Branding</h3>
+
+    <form method="POST" action="/settings/branding" enctype="multipart/form-data">
+        <label>Business Name</label>
+        <input type="text" name="business_name" value="{{ branding.business_name }}">
+
+        <label>Logo</label>
+        <input type="file" name="logo">
+
+        <label>Primary Color</label>
+        <input type="color" name="primary_color" value="{{ branding.primary_color }}">
+
+        <label>Secondary Color</label>
+        <input type="color" name="secondary_color" value="{{ branding.secondary_color }}">
+
+        <button class="btn-save">Save Branding</button>
+    </form>
+</div>
+
+<!-- BUSINESS CONFIG -->
+<div class="settings-section">
+    <h3>Business Configuration</h3>
+
+    <form method="POST" action="/settings/config">
+        <label>VAT Percentage</label>
+        <input type="number" step="0.01" name="vat_percentage" value="{{ config.vat_percentage }}">
+
+        <label>Currency Symbol</label>
+        <input type="text" name="currency" value="{{ config.currency }}">
+
+        <label>Invoice Prefix</label>
+        <input type="text" name="invoice_prefix" value="{{ config.invoice_prefix }}">
+
+        <label>Enable VAT</label>
+        <select name="enable_vat">
+            <option value="1" {% if config.enable_vat %}selected{% endif %}>Yes</option>
+            <option value="0" {% if not config.enable_vat %}selected{% endif %}>No</option>
+        </select>
+
+        <button class="btn-save">Save Configuration</button>
+    </form>
+</div>
+
 {% endblock %}

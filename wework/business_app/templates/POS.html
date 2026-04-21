@@ -4,79 +4,133 @@
 {% block content %}
 
 <style>
+    /* Layout */
     .pos-wrapper {
         display: flex;
-        gap: 20px;
+        gap: 24px;
         margin-top: 20px;
     }
 
+    /* Panels */
     .pos-panel {
         background: #ffffff;
-        padding: 20px;
-        border-radius: 12px;
-        border: 1px solid #ddd;
+        padding: 24px;
+        border-radius: 14px;
+        border: 1px solid #d7dfe9;
         flex: 1;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.06);
+        transition: 0.25s ease;
     }
 
+    .pos-panel:hover {
+        box-shadow: 0 6px 16px rgba(0,0,0,0.10);
+    }
+
+    .pos-panel h3 {
+        font-size: 20px;
+        font-weight: 600;
+        color: #1a2b49;
+        border-left: 4px solid #c8a24a;
+        padding-left: 12px;
+        margin-bottom: 18px;
+    }
+
+    /* Products Grid */
     .products-grid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
-        gap: 15px;
+        gap: 16px;
     }
 
     .product-card {
-        padding: 15px;
-        border: 1px solid #ccc;
-        border-radius: 10px;
+        padding: 16px;
+        border: 1px solid #d7dfe9;
+        border-radius: 12px;
         text-align: center;
         cursor: pointer;
-        background: #fafafa;
-        transition: 0.2s;
+        background: #fafbfd;
+        transition: 0.2s ease;
     }
 
     .product-card:hover {
-        background: #f0f0f0;
+        background: #f3f5fa;
+        border-color: #c8a24a;
     }
 
+    /* Cart Table */
     .cart-table {
         width: 100%;
         border-collapse: collapse;
+        margin-top: 10px;
     }
 
-    .cart-table th, .cart-table td {
-        padding: 10px;
-        border-bottom: 1px solid #eee;
+    .cart-table th {
+        background: #f3f5fa;
+        padding: 12px;
+        font-weight: 600;
+        color: #1a2b49;
+        border-bottom: 2px solid #d0d8e8;
     }
 
+    .cart-table td {
+        padding: 12px;
+        border-bottom: 1px solid #e6eaf2;
+    }
+
+    /* Checkout Box */
     .checkout-box {
         margin-top: 20px;
-        padding: 15px;
-        background: #fafafa;
-        border-radius: 10px;
-        border: 1px solid #ddd;
+        padding: 18px;
+        background: #f8f9fc;
+        border-radius: 12px;
+        border: 1px solid #d7dfe9;
     }
 
+    /* Buttons */
     .btn {
         padding: 10px 15px;
-        border-radius: 6px;
+        border-radius: 8px;
         border: none;
         cursor: pointer;
+        font-weight: 600;
         color: white;
+        transition: 0.2s ease;
     }
 
     .btn-checkout {
-        background: #28a745;
+        background: #1a2b49;
         width: 100%;
         font-size: 18px;
     }
 
+    .btn-checkout:hover {
+        background: #152238;
+    }
+
     .btn-remove {
-        background: #dc3545;
-        padding: 5px 10px;
+        background: #b02a37;
+        padding: 6px 12px;
+        border-radius: 6px;
+    }
+
+    /* Inputs */
+    input, select {
+        width: 100%;
+        padding: 10px;
+        border-radius: 8px;
+        border: 1px solid #cfd7e6;
+        margin-bottom: 12px;
+        font-size: 14px;
+    }
+
+    input:focus, select:focus {
+        outline: none;
+        border-color: #c8a24a;
+        box-shadow: 0 0 4px rgba(200,162,74,0.4);
     }
 </style>
 
-<h2>Point of Sale</h2>
+<h2 class="settings-title">Point of Sale</h2>
 
 <div class="pos-wrapper">
 
@@ -129,36 +183,29 @@
 
             <br>
 
-            <form method="POST" action="/pos_process_sale">
+            <!-- PAYMENT FORM -->
+            <form method="POST" action="/pos_process_sale" onsubmit="preparePOSSubmit()">
                 <input type="hidden" name="cart_data" id="cartData">
-                <div class="checkout-box">
+                <input type="hidden" name="payment_method" id="paymentMethodField">
+                <input type="hidden" name="amount_paid" id="amountPaidField">
+                <input type="hidden" name="change_due" id="changeDueField">
 
-    <label><strong>Payment Method</strong></label>
-    <select id="paymentMethod" name="payment_method" class="form-control" onchange="toggleCashFields()">
-        <option value="Cash">Cash</option>
-        <option value="Card">Card</option>
-        <option value="EFT">EFT</option>
-    </select>
+                <label><strong>Payment Method</strong></label>
+                <select id="paymentMethod" name="payment_method" onchange="toggleCashFields()">
+                    <option value="Cash">Cash</option>
+                    <option value="Card">Card</option>
+                    <option value="EFT">EFT</option>
+                </select>
 
-    <div id="cashFields" style="margin-top:15px;">
-        <label>Amount Paid</label>
-        <input type="number" step="0.01" id="amountPaid" class="form-control" oninput="calculateChange()">
+                <div id="cashFields" style="margin-top:15px;">
+                    <label>Amount Paid</label>
+                    <input type="number" step="0.01" id="amountPaid" oninput="calculateChange()">
 
-        <label>Change</label>
-        <input type="text" id="changeDue" class="form-control" readonly>
-    </div>
+                    <label>Change</label>
+                    <input type="text" id="changeDue" readonly>
+                </div>
 
-    <br>
-
-    <form method="POST" action="/pos_process_sale" onsubmit="preparePOSSubmit()">
-        <input type="hidden" name="cart_data" id="cartData">
-        <input type="hidden" name="payment_method" id="paymentMethodField">
-        <input type="hidden" name="amount_paid" id="amountPaidField">
-        <input type="hidden" name="change_due" id="changeDueField">
-
-        <button class="btn btn-checkout">Complete Sale</button>
-    </form>
-</div>
+                <br>
                 <button class="btn btn-checkout">Complete Sale</button>
             </form>
         </div>
@@ -171,13 +218,11 @@
 
     function addToCart(id, name, price) {
         let item = cart.find(i => i.id === id);
-
         if (item) {
             item.qty += 1;
         } else {
             cart.push({ id, name, price, qty: 1 });
         }
-
         renderCart();
     }
 
@@ -202,7 +247,7 @@
                     <td>${item.qty}</td>
                     <td>R ${item.price.toFixed(2)}</td>
                     <td>R ${total.toFixed(2)}</td>
-                    <td><button class="btn btn-remove" onclick="removeItem(${item.id})">X</button></td>
+                    <td><button class="btn btn-remove" onclick="removeItem(${item.id})">Remove</button></td>
                 </tr>
             `;
         });
@@ -216,26 +261,24 @@
 
         document.getElementById("cartData").value = JSON.stringify(cart);
     }
-</script>
-<script>
-function toggleCashFields() {
-    let method = document.getElementById("paymentMethod").value;
-    document.getElementById("cashFields").style.display = (method === "Cash") ? "block" : "none";
-}
 
-function calculateChange() {
-    let total = parseFloat(document.getElementById("total").innerText.replace("R ", ""));
-    let paid = parseFloat(document.getElementById("amountPaid").value || 0);
-    let change = paid - total;
+    function toggleCashFields() {
+        let method = document.getElementById("paymentMethod").value;
+        document.getElementById("cashFields").style.display = (method === "Cash") ? "block" : "none";
+    }
 
-    document.getElementById("changeDue").value = "R " + change.toFixed(2);
-}
+    function calculateChange() {
+        let total = parseFloat(document.getElementById("total").innerText.replace("R ", ""));
+        let paid = parseFloat(document.getElementById("amountPaid").value || 0);
+        let change = paid - total;
+        document.getElementById("changeDue").value = "R " + change.toFixed(2);
+    }
 
-function preparePOSSubmit() {
-    document.getElementById("paymentMethodField").value = document.getElementById("paymentMethod").value;
-    document.getElementById("amountPaidField").value = document.getElementById("amountPaid").value || 0;
-    document.getElementById("changeDueField").value = document.getElementById("changeDue").value || "0";
-}
+    function preparePOSSubmit() {
+        document.getElementById("paymentMethodField").value = document.getElementById("paymentMethod").value;
+        document.getElementById("amountPaidField").value = document.getElementById("amountPaid").value || 0;
+        document.getElementById("changeDueField").value = document.getElementById("changeDue").value || "0";
+    }
 </script>
 
 {% endblock %}

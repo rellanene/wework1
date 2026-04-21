@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+{% block title %}Bookkeeping & Reports{% endblock %}
+
+{% block content %}
+
+<style>
+    /* Page Title */
+    .page-title {
+        font-size: 28px;
+        font-weight: 700;
+        margin-bottom: 25px;
+        color: #1a2b49;
+        letter-spacing: 0.5px;
+    }
+
+    /* Section Card */
+    .report-section {
+        background: #ffffff;
+        padding: 28px;
+        border-radius: 14px;
+        border: 1px solid #d7dfe9;
+        margin-bottom: 32px;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.06);
+        transition: 0.25s ease;
+    }
+
+    .report-section:hover {
+        box-shadow: 0 6px 16px rgba(0,0,0,0.10);
+    }
+
+    .report-section h3 {
+        margin-bottom: 18px;
+        font-size: 20px;
+        font-weight: 600;
+        color: #1a2b49;
+        border-left: 4px solid #c8a24a; /* Gold accent */
+        padding-left: 12px;
+    }
+
+    /* Tables */
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+        font-size: 15px;
+    }
+
+    th {
+        background: #f3f5fa;
+        color: #1a2b49;
+        font-weight: 600;
+        padding: 12px;
+        border-bottom: 2px solid #d0d8e8;
+    }
+
+    td {
+        padding: 12px;
+        border-bottom: 1px solid #e6eaf2;
+    }
+
+    tr:hover td {
+        background: #fafbfd;
+    }
+
+    /* Upload Box */
+    .upload-box {
+        padding: 22px;
+        background: #f8f9fc;
+        border: 2px dashed #c7d2e3;
+        border-radius: 12px;
+        text-align: center;
+        color: #1a2b49;
+    }
+
+    /* Buttons */
+    .btn {
+        padding: 10px 18px;
+        border-radius: 8px;
+        border: none;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 14px;
+        transition: 0.2s ease;
+    }
+
+    .btn-primary { background: #1a2b49; color: white; }
+    .btn-primary:hover { background: #152238; }
+
+    .btn-success { background: #2e7d32; color: white; }
+    .btn-success:hover { background: #255f28; }
+
+    .btn-warning { background: #c8a24a; color: white; }
+    .btn-warning:hover { background: #b08c3f; }
+
+    /* Inputs */
+    input, select {
+        padding: 8px 10px;
+        border-radius: 6px;
+        border: 1px solid #cfd7e6;
+        margin-right: 10px;
+        font-size: 14px;
+    }
+
+    input:focus, select:focus {
+        outline: none;
+        border-color: #c8a24a;
+        box-shadow: 0 0 4px rgba(200,162,74,0.4);
+    }
+</style>
+
+<h2 class="page-title">Business Bookkeeping & Financial Reports</h2>
+
+<!-- FILTERS -->
+<div class="report-section">
+    <h3>Filters</h3>
+
+    <form method="GET" action="/reports">
+        <label>Date Range:</label>
+        <input type="date" name="start_date" value="{{ start_date }}">
+        <input type="date" name="end_date" value="{{ end_date }}">
+
+        <label style="margin-left:20px;">Store:</label>
+        <select name="store_id">
+            <option value="">All Stores</option>
+            {% for s in stores %}
+                <option value="{{ s.id }}" {% if s.id == store_id %}selected{% endif %}>{{ s.name }}</option>
+            {% endfor %}
+        </select>
+
+        <button class="btn btn-primary">Apply</button>
+    </form>
+</div>
+
+<!-- INCOME STATEMENT -->
+<div class="report-section">
+    <h3>Income Statement (Profit & Loss)</h3>
+
+    <table>
+        <tr><th>Description</th><th>Amount (R)</th></tr>
+        <tr><td>Total Sales</td><td>{{ income.total_sales }}</td></tr>
+        <tr><td>Cost of Goods Sold (COGS)</td><td>{{ income.cogs }}</td></tr>
+        <tr><td><strong>Gross Profit</strong></td><td><strong>{{ income.gross_profit }}</strong></td></tr>
+        <tr><td>Operating Expenses</td><td>{{ income.expenses }}</td></tr>
+        <tr><td><strong>Net Profit</strong></td><td><strong>{{ income.net_profit }}</strong></td></tr>
+    </table>
+</div>
+
+<!-- BALANCE SHEET -->
+<div class="report-section">
+    <h3>Balance Sheet</h3>
+
+    <table>
+        <tr><th>Assets</th><th>Amount (R)</th></tr>
+        <tr><td>Cash</td><td>{{ balance.cash }}</td></tr>
+        <tr><td>Inventory</td><td>{{ balance.inventory }}</td></tr>
+        <tr><td>Accounts Receivable</td><td>{{ balance.receivables }}</td></tr>
+
+        <tr><th>Liabilities</th><th></th></tr>
+        <tr><td>Accounts Payable</td><td>{{ balance.payables }}</td></tr>
+        <tr><td>Loans</td><td>{{ balance.loans }}</td></tr>
+
+        <tr><th>Equity</th><th></th></tr>
+        <tr><td>Owner's Equity</td><td>{{ balance.equity }}</td></tr>
+    </table>
+</div>
+
+<!-- CASH FLOW -->
+<div class="report-section">
+    <h3>Cash Flow Statement</h3>
+
+    <table>
+        <tr><th>Category</th><th>Amount (R)</th></tr>
+        <tr><td>Cash Inflows</td><td>{{ cashflow.inflows }}</td></tr>
+        <tr><td>Cash Outflows</td><td>{{ cashflow.outflows }}</td></tr>
+        <tr><td><strong>Net Cash Flow</strong></td><td><strong>{{ cashflow.net }}</strong></td></tr>
+    </table>
+</div>
+
+<!-- LEDGERS -->
+<div class="report-section">
+    <h3>Ledgers</h3>
+
+    <a href="/ledger/sales" class="btn btn-success">Sales Ledger</a>
+    <a href="/ledger/purchases" class="btn btn-success">Purchases Ledger</a>
+    <a href="/ledger/general" class="btn btn-success">General Ledger</a>
+    <a href="/ledger/vat" class="btn btn-success">VAT Ledger</a>
+</div>
+
+<!-- INVENTORY & COGS -->
+<div class="report-section">
+    <h3>Inventory & COGS</h3>
+
+    <table>
+        <tr><th>Description</th><th>Amount (R)</th></tr>
+        <tr><td>Opening Stock</td><td>{{ cogs.opening_stock }}</td></tr>
+        <tr><td>Purchases</td><td>{{ cogs.purchases }}</td></tr>
+        <tr><td>Closing Stock</td><td>{{ cogs.closing_stock }}</td></tr>
+        <tr><td><strong>COGS</strong></td><td><strong>{{ cogs.cogs }}</strong></td></tr>
+    </table>
+</div>
+
+<!-- EXTERNAL DATA IMPORT -->
+<div class="report-section">
+    <h3>Import External Data (CSV / Excel)</h3>
+
+    <div class="upload-box">
+        <p>Upload bank statements, expenses, supplier invoices, or journal entries.</p>
+        <form method="POST" action="/reports/import" enctype="multipart/form-data">
+            <input type="file" name="file" accept=".csv,.xlsx">
+            <button class="btn btn-warning">Upload</button>
+        </form>
+    </div>
+</div>
+
+<!-- MANUAL JOURNAL ENTRY -->
+<div class="report-section">
+    <h3>Manual Journal Entry</h3>
+
+    <form method="POST" action="/reports/journal">
+        <label>Date:</label>
+        <input type="date" name="date" required>
+
+        <label>Description:</label>
+        <input type="text" name="description" required>
+
+        <label>Debit Account:</label>
+        <input type="text" name="debit_account" required>
+
+        <label>Debit Amount:</label>
+        <input type="number" step="0.01" name="debit_amount" required>
+
+        <label>Credit Account:</label>
+        <input type="text" name="credit_account" required>
+
+        <label>Credit Amount:</label>
+        <input type="number" step="0.01" name="credit_amount" required>
+
+        <button class="btn btn-primary">Post Journal Entry</button>
+    </form>
+</div>
+
+{% endblock %}

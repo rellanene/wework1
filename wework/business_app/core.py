@@ -161,6 +161,14 @@ def create_app():
                 return redirect(url_for("login"))
             return f(*args, **kwargs)
         return wrapper
+    
+    #-----------Global Access-----
+    @app.context_processor
+    def inject_permissions():
+        if "user" in session:
+            permissions = get_permissions(session["user"]["id"])  # your logic here
+            return dict(permissions=permissions)
+        return dict(permissions=None)
 
     # -------------------------
     # AUTH & REGISTRATION
@@ -604,6 +612,508 @@ def create_app():
             flash(str(e), "danger")
             return redirect("/pos_page")
         
+    #-----------Bookkeeping Main-------------
+    from flask import request, render_template, flash, redirect
+    from datetime import date, datetime
+    import decimal
+
+    @app.route("/reports", methods=["GET"])
+    @login_required
+    def reports():
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        business_id = session["user"]["business_id"]
+    
+        # --------- DATE FILTERS ----------
+        start_date = request.args.get("start_date")
+        end_date = request.args.get("end_date")
+        store_id = request.args.get("store_id")
+    
+        if not start_date or not end_date:
+            today = date.today()
+            start_date = today.replace(day=1).isoformat()
+            end_date = today.isoformat()
+    
+        # --------- STORES LIST ----------
+        cursor.execute("""
+            SELECT id, name 
+            FROM stores 
+            WHERE business_id = %s
+        """, (business_id,))
+        stores = cursor.fetchall()
+    
+        store_filter_sql = ""
+        store_filter_params = []
+        if store_id:
+            store_filter_sql = " AND s.store_id = %s "
+            store_filter_params.append(store_id)
+    
+        # ================================
+        # 1) INCOME STATEMENT
+        # ================================
+    
+        # Total Sales
+        cursor.execute(f"""
+            SELECT IFNULL(SUM(s.total_amount), 0) AS total_sales
+            FROM sales s
+            WHERE s.business_id = %s
+              AND DATE(s.created_at) BETWEEN %s AND %s
+              {store_filter_sql}
+        """, (business_id, start_date, end_date, *store_filter_params))
+        row_sales = cursor.fetchone()
+        total_sales = row_sales["total_sales"]
+    
+        # COGS (simple version: sum wholesale * qty)
+        cursor.execute(f"""
+            SELECT IFNULL(SUM(p.wholesale_price * si.quantity), 0) AS cogs
+            FROM sale_items si
+            JOIN sales s ON si.sale_id = s.id
+            JOIN products p ON si.product_id = p.id
+            WHERE s.business_id = %s
+              AND DATE(s.created_at) BETWEEN %s AND %s
+              {store_filter_sql}
+        """, (business_id, start_date, end_date, *store_filter_params))
+        row_cogs = cursor.fetchone()
+        cogs = row_cogs["cogs"]
+    
+        gross_profit = total_sales - cogs
+    
+        # Operating Expenses (assuming expenses table)
+        cursor.execute("""
+            SELECT IFNULL(SUM(amount), 0) AS expenses
+            FROM expenses
+            WHERE business_id = %s
+              AND DATE(expense_date) BETWEEN %s AND %s
+        """, (business_id, start_date, end_date))
+        row_exp = cursor.fetchone()
+        expenses = row_exp["expenses"]
+    
+        net_profit = gross_profit - expenses
+    
+        income = {
+            "total_sales": round(total_sales, 2),
+            "cogs": round(cogs, 2),
+            "gross_profit": round(gross_profit, 2),
+            "expenses": round(expenses, 2),
+            "net_profit": round(net_profit, 2),
+        }
+    
+        # ================================
+        # 2) BALANCE SHEET
+        # ================================
+    
+        # Cash (simple: sum of cash movements or just a placeholder)
+        cursor.execute("""
+            SELECT IFNULL(SUM(amount), 0) AS cash
+            FROM cash_movements
+            WHERE business_id = %s
+        """, (business_id,))
+        row_cash = cursor.fetchone()
+        cash = row_cash["cash"]
+    
+        # Inventory value (retail or cost)
+        cursor.execute("""
+            SELECT IFNULL(SUM(i.quantity * p.wholesale_price), 0) AS inventory_value
+            FROM inventory i
+            JOIN products p ON p.id = i.product_id
+            WHERE p.business_id = %s
+        """, (business_id,))
+        row_inv = cursor.fetchone()
+        inventory_value = row_inv["inventory_value"]
+    
+        # Receivables (customers owing)
+        cursor.execute("""
+            SELECT IFNULL(SUM(balance), 0) AS receivables
+            FROM customers
+            WHERE business_id = %s
+        """, (business_id,))
+        row_rec = cursor.fetchone()
+        receivables = row_rec["receivables"]
+    
+        # Payables (suppliers owing)
+        cursor.execute("""
+            SELECT IFNULL(SUM(balance), 0) AS payables
+            FROM suppliers
+            WHERE business_id = %s
+        """, (business_id,))
+        row_pay = cursor.fetchone()
+        payables = row_pay["payables"]
+    
+        # Loans (simple table)
+        cursor.execute("""
+            SELECT IFNULL(SUM(outstanding_amount), 0) AS loans
+            FROM loans
+            WHERE business_id = %s
+        """, (business_id,))
+        row_loans = cursor.fetchone()
+        loans = row_loans["loans"]
+    
+        # Equity (very simplified: assets - liabilities)
+        total_assets = cash + inventory_value + receivables
+        total_liabilities = payables + loans
+        equity = total_assets - total_liabilities
+    
+        balance = {
+            "cash": round(cash, 2),
+            "inventory": round(inventory_value, 2),
+            "receivables": round(receivables, 2),
+            "payables": round(payables, 2),
+            "loans": round(loans, 2),
+            "equity": round(equity, 2),
+        }
+    
+        # ================================
+        # 3) CASH FLOW
+        # ================================
+    
+        # Cash inflows: sales received (simplified)
+        cursor.execute(f"""
+            SELECT IFNULL(SUM(s.total_amount), 0) AS inflows
+            FROM sales s
+            WHERE s.business_id = %s
+              AND DATE(s.created_at) BETWEEN %s AND %s
+              {store_filter_sql}
+        """, (business_id, start_date, end_date, *store_filter_params))
+        row_in = cursor.fetchone()
+        inflows = row_in["inflows"]
+    
+        # Cash outflows: expenses + purchases (simplified)
+        cursor.execute("""
+            SELECT IFNULL(SUM(amount), 0) AS exp_out
+            FROM expenses
+            WHERE business_id = %s
+              AND DATE(expense_date) BETWEEN %s AND %s
+        """, (business_id, start_date, end_date))
+        row_exp_out = cursor.fetchone()
+        exp_out = row_exp_out["exp_out"]
+    
+        cursor.execute("""
+            SELECT IFNULL(SUM(total_amount), 0) AS purchases_out
+            FROM purchases
+            WHERE business_id = %s
+              AND DATE(purchase_date) BETWEEN %s AND %s
+        """, (business_id, start_date, end_date))
+        row_pur_out = cursor.fetchone()
+        pur_out = row_pur_out["purchases_out"]
+    
+        outflows = exp_out + pur_out
+        net_cash = inflows - outflows
+    
+        cashflow = {
+            "inflows": round(inflows, 2),
+            "outflows": round(outflows, 2),
+            "net": round(net_cash, 2),
+        }
+    
+        # ================================
+        # 4) INVENTORY & COGS BLOCK
+        # ================================
+    
+        # Opening stock (assume stored in a table or approximate)
+        cursor.execute("""
+            SELECT IFNULL(SUM(opening_qty * p.wholesale_price), 0) AS opening_stock
+            FROM opening_stock os
+            JOIN products p ON p.id = os.product_id
+            WHERE os.business_id = %s
+        """, (business_id,))
+        row_open = cursor.fetchone()
+        opening_stock = row_open["opening_stock"]
+    
+        # Purchases in period
+        cursor.execute("""
+            SELECT IFNULL(SUM(pi.quantity * pi.cost_price), 0) AS purchases
+            FROM purchase_items pi
+            JOIN purchases pu ON pi.purchase_id = pu.id
+            WHERE pu.business_id = %s
+              AND DATE(pu.purchase_date) BETWEEN %s AND %s
+        """, (business_id, start_date, end_date))
+        row_pur = cursor.fetchone()
+        purchases = row_pur["purchases"]
+    
+        # Closing stock (current inventory)
+        closing_stock = inventory_value
+    
+        cogs_calc = opening_stock + purchases - closing_stock
+    
+        cogs_block = {
+            "opening_stock": round(opening_stock, 2),
+            "purchases": round(purchases, 2),
+            "closing_stock": round(closing_stock, 2),
+            "cogs": round(cogs_calc, 2),
+        }
+    
+        return render_template(
+            "reports.html",
+            start_date=start_date,
+            end_date=end_date,
+            stores=stores,
+            store_id=int(store_id) if store_id else None,
+            income=income,
+            balance=balance,
+            cashflow=cashflow,
+            cogs=cogs_block,
+        )
+        
+    #-----------Bookeeping EXT data----------
+    @app.route("/reports/import", methods=["POST"])
+    @login_required
+    def reports_import():
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+        business_id = session["user"]["business_id"]
+    
+        file = request.files.get("file")
+        if not file:
+            flash("No file selected", "danger")
+            return redirect("/reports")
+    
+        filename = file.filename.lower()
+        if not (filename.endswith(".csv") or filename.endswith(".xlsx")):
+            flash("Only CSV or Excel files are supported", "danger")
+            return redirect("/reports")
+    
+        # For now, just store file metadata in a table for later processing
+        cursor.execute("""
+            INSERT INTO imports (business_id, filename, uploaded_at)
+            VALUES (%s, %s, NOW())
+        """, (business_id, filename))
+        db.commit()
+    
+        flash("File uploaded successfully. Processing logic can be added later.", "success")
+        return redirect("/reports")
+    
+    #-----------Bookeeping Journal-----------
+    @app.route("/reports/journal", methods=["POST"])
+    @login_required
+    def reports_journal():
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+        business_id = session["user"]["business_id"]
+    
+        date_str = request.form.get("date")
+        description = request.form.get("description")
+        debit_account = request.form.get("debit_account")
+        credit_account = request.form.get("credit_account")
+        debit_amount = float(request.form.get("debit_amount") or 0)
+        credit_amount = float(request.form.get("credit_amount") or 0)
+    
+        if abs(debit_amount - credit_amount) > 0.0001:
+            flash("Debit and credit must be equal for a balanced journal entry.", "danger")
+            return redirect("/reports")
+    
+        try:
+            cursor.execute("""
+                INSERT INTO journal_entries 
+                    (business_id, entry_date, description, debit_account, credit_account, amount)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (business_id, date_str, description, debit_account, credit_account, debit_amount))
+            db.commit()
+            flash("Journal entry posted successfully.", "success")
+        except Exception as e:
+            db.rollback()
+            print("JOURNAL ERROR:", e)
+            flash("Error posting journal entry: " + str(e), "danger")
+    
+        return redirect("/reports")
+    
+    #-----------Load permissions, branding, configa---#
+    def get_permissions(user_id):
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM user_permissions WHERE user_id = %s", (user_id,))
+        return cursor.fetchone()
+    
+
+    def get_branding(business_id):
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM business_branding WHERE business_id = %s", (business_id,))
+        row = cursor.fetchone()
+        return row
+    
+    
+    def get_config(business_id):
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM business_config WHERE business_id = %s", (business_id,))
+        row = cursor.fetchone()
+        return row
+    
+    #--------------MAIN SETTINGS PAGE ROUTE
+    @app.route("/settings")
+    @login_required
+    def settings():
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        business_id = session["user"]["business_id"]
+    
+        # Load all users for permissions dropdown
+        cursor.execute("""
+            SELECT id, name, role 
+            FROM users 
+            WHERE business_id = %s
+        """, (business_id,))
+        users = cursor.fetchall()
+    
+        branding = get_branding(business_id)
+        config = get_config(business_id)
+    
+        return render_template(
+            "settings.html",
+            users=users,
+            branding=branding,
+            config=config
+        )
+        
+     #----------SAVE USER PERMISSIONS
+    @app.route("/settings/permissions", methods=["POST"])
+    @login_required
+    def settings_permissions():
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        user_id = request.form.get("user_id")
+    
+        fields = [
+            "can_view_dashboard",
+            "can_view_products",
+            "can_view_customers",
+            "can_view_sales",
+            "can_view_finances",
+            "can_view_visuals",
+            "can_view_stores",
+            "can_view_stock_in",
+            "can_view_stock_transfer",
+            "can_view_movements",
+            "can_view_gallery",
+            "can_view_settings"
+        ]
+    
+        values = [request.form.get(f) for f in fields]
+    
+        # Check if permissions exist
+        cursor.execute("SELECT id FROM user_permissions WHERE user_id = %s", (user_id,))
+        exists = cursor.fetchone()
+    
+        if exists:
+            # Update
+            sql = f"""
+                UPDATE user_permissions SET 
+                {", ".join([f"{f}=%s" for f in fields])}
+                WHERE user_id = %s
+            """
+            cursor.execute(sql, (*values, user_id))
+        else:
+            # Insert
+            sql = f"""
+                INSERT INTO user_permissions 
+                (user_id, {", ".join(fields)})
+                VALUES (%s, {", ".join(["%s"] * len(fields))})
+            """
+            cursor.execute(sql, (user_id, *values))
+    
+        db.commit()
+        flash("Permissions updated successfully.", "success")
+        return redirect("/settings")
+    
+   
+    #-----------SAVE BRANDING (LOGO + COLORS + BUSINESS NAME)    
+  
+
+    @app.route("/settings/branding", methods=["POST"])
+    @login_required
+    def settings_branding():
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        business_id = session["user"]["business_id"]
+    
+        business_name = request.form.get("business_name")
+        primary_color = request.form.get("primary_color")
+        secondary_color = request.form.get("secondary_color")
+    
+        logo_file = request.files.get("logo")
+        logo_path = None
+    
+        if logo_file and logo_file.filename:
+            filename = secure_filename(logo_file.filename)
+            save_path = os.path.join(UPLOAD_FOLDER, filename)
+            logo_file.save(save_path)
+            logo_path = f"/static/uploads/logos/{filename}"
+    
+        # Check if branding exists
+        cursor.execute("SELECT id FROM business_branding WHERE business_id = %s", (business_id,))
+        exists = cursor.fetchone()
+    
+        if exists:
+            if logo_path:
+                cursor.execute("""
+                    UPDATE business_branding
+                    SET business_name=%s, primary_color=%s, secondary_color=%s, logo_path=%s
+                    WHERE business_id=%s
+                """, (business_name, primary_color, secondary_color, logo_path, business_id))
+            else:
+                cursor.execute("""
+                    UPDATE business_branding
+                    SET business_name=%s, primary_color=%s, secondary_color=%s
+                    WHERE business_id=%s
+                """, (business_name, primary_color, secondary_color, business_id))
+        else:
+            cursor.execute("""
+                INSERT INTO business_branding (business_id, business_name, primary_color, secondary_color, logo_path)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (business_id, business_name, primary_color, secondary_color, logo_path))
+    
+        db.commit()
+        flash("Branding updated successfully.", "success")
+        return redirect("/settings")
+    
+    
+    #-------------SAVE BUSINESS CONFIGURATION
+    @app.route("/settings/config", methods=["POST"])
+    @login_required
+    def settings_config():
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        business_id = session["user"]["business_id"]
+    
+        vat_percentage = request.form.get("vat_percentage")
+        currency = request.form.get("currency")
+        invoice_prefix = request.form.get("invoice_prefix")
+        enable_vat = request.form.get("enable_vat")
+    
+        cursor.execute("SELECT id FROM business_config WHERE business_id = %s", (business_id,))
+        exists = cursor.fetchone()
+    
+        if exists:
+            cursor.execute("""
+                UPDATE business_config
+                SET vat_percentage=%s, currency=%s, invoice_prefix=%s, enable_vat=%s
+                WHERE business_id=%s
+            """, (vat_percentage, currency, invoice_prefix, enable_vat, business_id))
+        else:
+            cursor.execute("""
+                INSERT INTO business_config (business_id, vat_percentage, currency, invoice_prefix, enable_vat)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (business_id, vat_percentage, currency, invoice_prefix, enable_vat))
+    
+        db.commit()
+        flash("Business configuration updated successfully.", "success")
+        return redirect("/settings")
+
+
+
+
+
+
+
+
+    
+    
+        
     #------------POS Invoice---------
     @app.route("/pos_invoice/<int:sale_id>")
     @login_required
@@ -822,10 +1332,10 @@ def create_app():
     # -------------------------
     # SETTINGS
     # -------------------------
-    @app.route("/settings")
-    @login_required
-    def settings():
-        return render_template("settings.html")
+    #@app.route("/settings")
+    #@login_required
+    #def settings():
+        #return render_template("settings.html")
 
     # -------------------------
     # GALLERY
