@@ -1,17 +1,67 @@
 {% extends "base.html" %}
-{% block title %}Login{% endblock %}
 {% block content %}
-<div class="card auth-card">
-    <h2>Login</h2>
-    <form method="post">
-        <label>Email</label>
-        <input type="email" name="email" required>
 
-        <label>Password</label>
-        <input type="password" name="password" required>
+<style>
+    .login-wrapper {
+        min-height: 80vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
 
-        <button type="submit" class="btn-primary">Login</button>
-    </form>
-    <p class="muted">No account? <a href="{{ url_for('register') }}">Register</a></p>
+    .login-card {
+        width: 100%;
+        max-width: 420px;
+        background: #ffffff;
+        padding: 35px 30px;
+        border-radius: 12px;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+        border: 1px solid #e6e9ef;
+    }
+
+    .login-title {
+        font-weight: 700;
+        color: #000000; /* Changed to black */
+        text-align: center;
+        margin-bottom: 25px;
+    }
+
+    .login-card a {
+        color: #0c47a1;
+        text-decoration: none;
+        font-weight: 500;
+    }
+
+    .login-card a:hover {
+        text-decoration: underline;
+    }
+</style>
+
+<div class="login-wrapper">
+    <div class="login-card">
+
+        <h2 class="login-title">Welcome Back</h2>
+
+        <form method="POST">
+            <label>Email</label>
+            <input type="email" name="email" class="form-control" required>
+
+            <label class="mt-3">Password</label>
+            <input type="password" name="password" class="form-control" required>
+
+            <button class="btn btn-primary mt-4 w-100">Login</button>
+        </form>
+
+        <div class="mt-3 text-center">
+            <a href="{{ url_for('forgot_password') }}">Forgot Password?</a>
+        </div>
+
+        <div class="mt-3 text-center">
+            <span>Don't have an account?</span>
+            <a href="{{ url_for('register') }}" class="fw-bold">Register</a>
+        </div>
+
+    </div>
 </div>
+
 {% endblock %}

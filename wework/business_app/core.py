@@ -179,35 +179,120 @@ def create_app():
         cursor = db.cursor(dictionary=True)
         cursor.execute("SELECT id, name FROM businesses")
         businesses = cursor.fetchall()
-
+    
         if request.method == "POST":
             user_type = request.form["user_type"]
             name = request.form["name"]
             email = request.form["email"]
             password = hash_password(request.form["password"])
-
+    
+            # Security questions
+            q1 = request.form["question1"]
+            a1 = request.form["answer1"]
+            q2 = request.form["question2"]
+            a2 = request.form["answer2"]
+            q3 = request.form["question3"]
+            a3 = request.form["answer3"]
+            q4 = request.form["question4"]
+            a4 = request.form["answer4"]
+            q5 = request.form["question5"]
+            a5 = request.form["answer5"]
+    
+            # -----------------------------
+            # OWNER REGISTRATION
+            # -----------------------------
             if user_type == "end_user":
                 business_name = request.form["business_name"]
+    
+                # Create business
                 cursor.execute("INSERT INTO businesses (name) VALUES (%s)", (business_name,))
                 business_id = cursor.lastrowid
-
+    
+                # Create owner user
                 cursor.execute("""
                     INSERT INTO users (business_id, name, email, password, role)
                     VALUES (%s, %s, %s, %s, 'owner')
                 """, (business_id, name, email, password))
-
+                user_id = cursor.lastrowid
+    
+                # Save security questions
+                cursor.execute("""
+                    INSERT INTO user_security_questions (
+                        user_id, question1, answer1, question2, answer2,
+                        question3, answer3, question4, answer4, question5, answer5
+                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """, (user_id, q1, a1, q2, a2, q3, a3, q4, a4, q5, a5))
+    
+                # Owner gets full permissions
+                cursor.execute("""
+                    INSERT INTO user_permissions (
+                        user_id,
+                        can_view_dashboard,
+                        can_view_products,
+                        can_view_customers,
+                        can_view_sales,
+                        can_view_pos,
+                        can_view_finances,
+                        can_view_reports,
+                        can_view_visuals,
+                        can_view_stores,
+                        can_view_stock_in,
+                        can_view_stock_transfer,
+                        can_view_movements,
+                        can_view_gallery,
+                        can_view_settings,
+                        can_view_profile
+                    ) VALUES (%s, 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1)
+                """, (user_id,))
+    
+            # -----------------------------
+            # STAFF REGISTRATION
+            # -----------------------------
             elif user_type == "staff":
                 business_id = request.form["business_id"]
+    
                 cursor.execute("""
                     INSERT INTO users (business_id, name, email, password, role)
                     VALUES (%s, %s, %s, %s, 'staff')
                 """, (business_id, name, email, password))
-
+                user_id = cursor.lastrowid
+    
+                # Save security questions
+                cursor.execute("""
+                    INSERT INTO user_security_questions (
+                        user_id, question1, answer1, question2, answer2,
+                        question3, answer3, question4, answer4, question5, answer5
+                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """, (user_id, q1, a1, q2, a2, q3, a3, q4, a4, q5, a5))
+    
+                # Staff gets ZERO permissions by default
+                cursor.execute("""
+                    INSERT INTO user_permissions (
+                        user_id,
+                        can_view_dashboard,
+                        can_view_products,
+                        can_view_customers,
+                        can_view_sales,
+                        can_view_pos,
+                        can_view_finances,
+                        can_view_reports,
+                        can_view_visuals,
+                        can_view_stores,
+                        can_view_stock_in,
+                        can_view_stock_transfer,
+                        can_view_movements,
+                        can_view_gallery,
+                        can_view_settings,
+                        can_view_profile
+                    ) VALUES (%s, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+                """, (user_id,))
+    
             db.commit()
             flash("Registration successful. Please log in.", "success")
             return redirect(url_for("login"))
-
+    
         return render_template("register.html", businesses=businesses)
+
 
     @app.route("/login", methods=["GET", "POST"])
     def login():
@@ -238,6 +323,74 @@ def create_app():
     def logout():
         session.clear()
         return redirect(url_for("login"))
+    
+    #---------------Forgot Password Page---------
+    @app.route("/forgot_password", methods=["GET", "POST"])
+    def forgot_password():
+        if request.method == "POST":
+            email = request.form["email"]
+    
+            db = get_db()
+            cursor = db.cursor(dictionary=True)
+            cursor.execute("SELECT * FROM users WHERE email=%s", (email,))
+            user = cursor.fetchone()
+    
+            if not user:
+                flash("Email not found", "danger")
+                return redirect(url_for("forgot_password"))
+    
+            # Load security questions
+            cursor.execute("SELECT * FROM user_security_questions WHERE user_id=%s", (user["id"],))
+            questions = cursor.fetchone()
+    
+            return render_template("answer_questions.html", user=user, questions=questions)
+    
+        return render_template("forgot_password.html")
+    
+    #----------------Validate Answers----------
+    @app.route("/validate_answers", methods=["POST"])
+    def validate_answers():
+        user_id = request.form["user_id"]
+    
+        answers = [
+            request.form["answer1"],
+            request.form["answer2"],
+            request.form["answer3"],
+            request.form["answer4"],
+            request.form["answer5"]
+        ]
+    
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM user_security_questions WHERE user_id=%s", (user_id,))
+        q = cursor.fetchone()
+    
+        correct = [
+            q["answer1"], q["answer2"], q["answer3"], q["answer4"], q["answer5"]
+        ]
+    
+        if answers == correct:
+            return render_template("reset_password.html", user_id=user_id)
+    
+        flash("Incorrect answers", "danger")
+        return redirect(url_for("forgot_password"))
+    
+    #----------------Save New Password-----------
+    @app.route("/reset_password", methods=["POST"])
+    def reset_password():
+        user_id = request.form["user_id"]
+        new_password = hash_password(request.form["password"])
+    
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute("UPDATE users SET password=%s WHERE id=%s", (new_password, user_id))
+        db.commit()
+    
+        flash("Password reset successful. Please log in.", "success")
+        return redirect(url_for("login"))
+
+
+
     
     #---------------ADD STOCK BARCODE-------------
     
