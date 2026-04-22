@@ -74,70 +74,79 @@ def get_or_create_inventory(product_id, store_id):
     return cursor.lastrowid
 
 
-def add_stock(product_id, store_id, quantity, business_id):
+def add_stock(product_id, quantity, store_id, user_id, business_id):
     db = get_db()
     cursor = db.cursor()
 
-    inv_id = get_or_create_inventory(product_id, store_id)
-
+    # Update stock_levels
     cursor.execute("""
-        UPDATE inventory
-        SET quantity = quantity + %s
-        WHERE id=%s
-    """, (quantity, inv_id))
+        INSERT INTO stock_levels (business_id, product_id, store_id, quantity)
+        VALUES (%s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)
+    """, (business_id, product_id, store_id, quantity))
 
+    # Log movement (aligned with your DB)
     cursor.execute("""
-        INSERT INTO stock_movements (product_id, business_id, to_store_id, quantity, movement_type)
-        VALUES (%s, %s, %s, %s, 'stock_in')
-    """, (product_id, business_id, store_id, quantity))
+        INSERT INTO stock_movements 
+        (business_id, product_id, movement_type, quantity, to_store_id, user_id)
+        VALUES (%s, %s, 'stock_in', %s, %s, %s)
+    """, (business_id, product_id, quantity, store_id, user_id))
 
     db.commit()
 
 
-def reduce_stock_on_sale(product_id, store_id, quantity, business_id, sale_id):
+
+
+def reduce_stock_on_sale(product_id, user_id, store_id, quantity, business_id, sale_id):
     db = get_db()
     cursor = db.cursor()
-
-    inv_id = get_or_create_inventory(product_id, store_id)
 
     # Reduce stock
     cursor.execute("""
-        UPDATE inventory
+        UPDATE stock_levels
         SET quantity = quantity - %s
-        WHERE id=%s
-    """, (quantity, inv_id))
+        WHERE product_id=%s AND store_id=%s AND business_id=%s
+    """, (quantity, product_id, store_id, business_id))
 
-    # Record movement WITH sale_id (IMPORTANT)
+    # Log movement
     cursor.execute("""
         INSERT INTO stock_movements 
-        (product_id, business_id, from_store_id, quantity, movement_type, sale_id)
-        VALUES (%s, %s, %s, %s, 'sale', %s)
-    """, (product_id, business_id, store_id, quantity, sale_id))
+        (business_id, product_id, movement_type, quantity, from_store_id, user_id, sale_id)
+        VALUES (%s, %s, 'sale', %s, %s, %s, %s)
+    """, (business_id, product_id, quantity, store_id, user_id, sale_id))
 
     db.commit()
 
 
-def transfer_stock(product_id, from_store, to_store, quantity, business_id):
+
+def transfer_stock(product_id, user_id, from_store_id, to_store_id, quantity, business_id):
     db = get_db()
     cursor = db.cursor()
 
-    from_inv = get_or_create_inventory(product_id, from_store)
-    to_inv = get_or_create_inventory(product_id, to_store)
-
+    # Reduce from source store
     cursor.execute("""
-        UPDATE inventory SET quantity = quantity - %s WHERE id=%s
-    """, (quantity, from_inv))
+        UPDATE stock_levels
+        SET quantity = quantity - %s
+        WHERE product_id=%s AND store_id=%s AND business_id=%s
+    """, (quantity, product_id, from_store_id, business_id))
 
+    # Add to destination store
     cursor.execute("""
-        UPDATE inventory SET quantity = quantity + %s WHERE id=%s
-    """, (quantity, to_inv))
+        INSERT INTO stock_levels (business_id, product_id, store_id, quantity)
+        VALUES (%s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)
+    """, (business_id, product_id, to_store_id, quantity))
 
+    # Log movement
     cursor.execute("""
-        INSERT INTO stock_movements (product_id, business_id, from_store_id, to_store_id, quantity, movement_type)
-        VALUES (%s, %s, %s, %s, %s, 'transfer')
-    """, (product_id, business_id, from_store, to_store, quantity))
+        INSERT INTO stock_movements 
+        (business_id, product_id, movement_type, quantity, from_store_id, to_store_id, user_id)
+        VALUES (%s, %s, 'transfer', %s, %s, %s, %s)
+    """, (business_id, product_id, quantity, from_store_id, to_store_id, user_id))
 
     db.commit()
+
+
 
 
 # -----------------------------
@@ -508,6 +517,47 @@ def create_app():
         cursor.execute("SELECT * FROM stores WHERE business_id=%s", (business_id,))
         stores_list = cursor.fetchall()
         return render_template("stores.html", stores=stores_list)
+    
+    #Store Items
+    @app.route("/store/<int:store_id>/products")
+    @login_required
+    def store_products(store_id):
+        business_id = session["user"]["business_id"]
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        # Validate store
+        cursor.execute("""
+            SELECT id FROM stores 
+            WHERE id=%s AND business_id=%s
+        """, (store_id, business_id))
+        store = cursor.fetchone()
+    
+        if not store:
+            return jsonify({"products": []})
+    
+        # Return ALL products, even if no stock exists
+        cursor.execute("""
+            SELECT 
+                p.id,
+                p.name,
+                COALESCE(p.price, 0) AS price,
+                COALESCE(sl.quantity, 0) AS quantity
+            FROM products p
+            LEFT JOIN stock_levels sl
+                ON sl.product_id = p.id
+                AND sl.store_id = %s
+                AND sl.business_id = %s
+            WHERE p.business_id = %s
+            ORDER BY p.name
+        """, (store_id, business_id, business_id))
+    
+        products = cursor.fetchall()
+    
+        return jsonify({"products": products})
+
+
+
 
     # -------------------------
     # PRODUCTS (with total quantity)
@@ -549,24 +599,29 @@ def create_app():
     @login_required
     def stock_in():
         business_id = session["user"]["business_id"]
+        user_id = session["user"]["id"]  # REQUIRED
         db = get_db()
         cursor = db.cursor(dictionary=True)
-
+    
         cursor.execute("SELECT * FROM products WHERE business_id=%s", (business_id,))
         products_list = cursor.fetchall()
-
+    
         cursor.execute("SELECT * FROM stores WHERE business_id=%s", (business_id,))
         stores_list = cursor.fetchall()
-
+    
         if request.method == "POST":
             product_id = request.form["product_id"]
             store_id = request.form["store_id"]
             quantity = int(request.form["quantity"])
-            add_stock(product_id, store_id, quantity, business_id)
+    
+            # FIXED: pass user_id + business_id in correct order
+            add_stock(product_id, quantity, store_id, user_id, business_id)
+    
             flash("Stock added successfully", "success")
             return redirect(url_for("stock_in"))
-
+    
         return render_template("stock_in.html", products=products_list, stores=stores_list)
+
 
     # -------------------------
     # STOCK TRANSFER
@@ -575,30 +630,41 @@ def create_app():
     @login_required
     def stock_transfer():
         business_id = session["user"]["business_id"]
+        user_id = session["user"]["id"]   # <-- REQUIRED
         db = get_db()
         cursor = db.cursor(dictionary=True)
-
+    
         cursor.execute("SELECT * FROM products WHERE business_id=%s", (business_id,))
         products_list = cursor.fetchall()
-
+    
         cursor.execute("SELECT * FROM stores WHERE business_id=%s", (business_id,))
         stores_list = cursor.fetchall()
-
+    
         if request.method == "POST":
             product_id = request.form["product_id"]
             from_store = request.form["from_store"]
             to_store = request.form["to_store"]
             quantity = int(request.form["quantity"])
-
+    
             if from_store == to_store:
                 flash("Source and destination store cannot be the same", "danger")
                 return redirect(url_for("stock_transfer"))
-
-            transfer_stock(product_id, from_store, to_store, quantity, business_id)
+    
+            # FIXED ARGUMENT ORDER
+            transfer_stock(
+                product_id,
+                user_id,        # <-- MUST BE SECOND
+                from_store,
+                to_store,
+                quantity,
+                business_id
+            )
+    
             flash("Stock transferred successfully", "success")
             return redirect(url_for("stock_transfer"))
-
+    
         return render_template("stock_transfer.html", products=products_list, stores=stores_list)
+
 
 # -------------------------
 # SALES (WITH FILTERS)
@@ -725,6 +791,7 @@ def create_app():
             # -------------------------
             business_id = session["user"]["business_id"]
             store_id = session["user"].get("store_id", None)
+            user_id = session["user"]["id"]
     
             # -------------------------
             # TOTALS
@@ -1334,11 +1401,13 @@ def create_app():
         query = """
             SELECT sm.*,
                    p.name AS product_name,
+                   u.name AS user_name,
                    fs.name AS from_store_name,
                    ts.name AS to_store_name,
                    sm.sale_id
             FROM stock_movements sm
             LEFT JOIN products p ON sm.product_id = p.id
+            LEFT JOIN users u ON sm.user_id = u.id
             LEFT JOIN stores fs ON sm.from_store_id = fs.id
             LEFT JOIN stores ts ON sm.to_store_id = ts.id
         """
@@ -1350,17 +1419,14 @@ def create_app():
         # APPLY FILTERS
         # -------------------------
     
-        # Start Date
         if start_date:
             conditions.append("DATE(sm.created_at) >= %s")
             params.append(start_date)
     
-        # End Date
         if end_date:
             conditions.append("DATE(sm.created_at) <= %s")
             params.append(end_date)
     
-        # Product Name
         if product_name:
             conditions.append("p.name LIKE %s")
             params.append(f"%{product_name}%")
@@ -1377,82 +1443,7 @@ def create_app():
             products=products,
             movements=movements
         )
-        
-    #--------------MOVEMENT EXPORT-----------
-    @app.route("/movements/export")
-
     
-    
-    @app.route("/movements/export")
-    @login_required
-    def export_movements():
-        business_id = session["user"]["business_id"]
-        db = get_db()
-        cursor = db.cursor(dictionary=True)
-    
-        # Filters
-        start_date = request.args.get("start_date")
-        end_date = request.args.get("end_date")
-        product_name = request.args.get("product_name")
-    
-        query = """
-            SELECT sm.id, sm.created_at, p.name AS product_name,
-                   fs.name AS from_store, ts.name AS to_store,
-                   sm.quantity, sm.movement_type
-            FROM stock_movements sm
-            LEFT JOIN products p ON sm.product_id = p.id
-            LEFT JOIN stores fs ON sm.from_store_id = fs.id
-            LEFT JOIN stores ts ON sm.to_store_id = ts.id
-            WHERE sm.business_id = %s
-        """
-    
-        params = [business_id]
-    
-        if start_date:
-            query += " AND DATE(sm.created_at) >= %s"
-            params.append(start_date)
-    
-        if end_date:
-            query += " AND DATE(sm.created_at) <= %s"
-            params.append(end_date)
-    
-        if product_name:
-            query += " AND p.name LIKE %s"
-            params.append(f"%{product_name}%")
-    
-        query += " ORDER BY sm.created_at DESC"
-    
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-    
-        # Create Excel workbook
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Stock Movements"
-    
-        # Header
-        if rows:
-            ws.append(list(rows[0].keys()))
-    
-        # Rows
-        for row in rows:
-            ws.append(list(row.values()))
-    
-        # Save to memory
-        output = BytesIO()
-        wb.save(output)
-        output.seek(0)
-    
-        # Unique filename with seconds
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        filename = f"stock_movements_{timestamp}.xlsx"
-    
-        return send_file(
-            output,
-            download_name=filename,
-            as_attachment=True,
-            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )    
     # -------------------------
     # CUSTOMERS
     # -------------------------
@@ -1785,6 +1776,7 @@ def create_app():
         try:
             business_id = session["user"]["business_id"]
             cashier_name = session["user"]["name"]
+            user_id = session["user"]["id"]   # FIXED
     
             product_ids = request.form.getlist("product_id[]")
             quantities = request.form.getlist("quantity[]")
@@ -1845,6 +1837,54 @@ def create_app():
             sale_id = cursor.lastrowid
     
             # -------------------------
+            # INSERT ITEMS + REDUCE STOCK
+            # -------------------------
+            for item in items:
+                cursor.execute("""
+                    INSERT INTO sale_items (sale_id, product_id, quantity, price, line_total)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (sale_id, item["product_id"], item["quantity"], item["price"], item["line_total"]))
+    
+                reduce_stock_on_sale(
+                    item["product_id"],
+                    user_id,
+                    store_id,
+                    item["quantity"],
+                    business_id,
+                    sale_id
+                )
+    
+            db.commit()
+    
+            # -------------------------
+            # GENERATE PDF + SAVE TO GALLERY
+            # -------------------------
+            cursor.execute("SELECT * FROM sales WHERE id=%s", (sale_id,))
+            sale_data = cursor.fetchone()
+    
+            cursor.execute("""
+                SELECT si.*, p.name 
+                FROM sale_items si
+                JOIN products p ON si.product_id = p.id
+                WHERE si.sale_id=%s
+            """, (sale_id,))
+            sale_items = cursor.fetchall()
+    
+            sale_data["items"] = sale_items
+    
+            # Your existing PDF generator
+            generate_invoice_for_sale(sale_id, sale_data)
+            flash("Sale recorded successfully!", "success")    
+            return redirect("/sales")
+    
+        except Exception as e:
+            db.rollback()
+            print("SALE ERROR:", e)
+            flash(str(e), "danger")
+            return redirect("/sales")
+
+    
+            # -------------------------
             # INSERT ITEMS + STOCK MOVEMENTS
             # -------------------------
             for item in items:
@@ -1862,6 +1902,8 @@ def create_app():
                 if store_id:
                     reduce_stock_on_sale(
                         item["product_id"],
+                        user_id,
+                        session["user_id"],
                         store_id,
                         item["quantity"],
                         business_id,
@@ -1976,7 +2018,105 @@ def create_app():
             total_amount=total_amount,
             business_name=business_name,
             cashier_name=cashier_name
-        )    
+        )
+        
+     #Outlook
+        @app.route("/email_invoice/<int:sale_id>")
+        @login_required
+        def email_invoice(sale_id):
+            db = get_db()
+            cursor = db.cursor(dictionary=True)
+        
+            # Get sale + items
+            cursor.execute("SELECT * FROM sales WHERE id=%s", (sale_id,))
+            sale_data = cursor.fetchone()
+        
+            cursor.execute("""
+                SELECT si.*, p.name 
+                FROM sale_items si
+                JOIN products p ON si.product_id = p.id
+                WHERE si.sale_id=%s
+            """, (sale_id,))
+            sale_items = cursor.fetchall()
+        
+            sale_data["items"] = sale_items
+        
+            # Generate PDF
+            generate_invoice_for_sale(sale_id, sale_data)
+            pdf_path = os.path.abspath(f"static/invoices/invoice_{sale_id}.pdf")
+        
+            # Get customer email
+            cursor.execute("""
+                SELECT c.email, c.name
+                FROM sales s
+                LEFT JOIN customers c ON s.customer_id = c.id
+                WHERE s.id=%s
+            """, (sale_id,))
+            row = cursor.fetchone()
+        
+            customer_email = row["email"] if row else ""
+            customer_name = row["name"] if row else "Customer"
+        
+            subject = f"Invoice #{sale_id}"
+            body = f"Dear {customer_name},%0D%0A%0D%0APlease find your invoice attached.%0D%0A%0D%0ARegards,%0D%0A{session['user']['name']}"
+        
+            # Open Outlook with attachment
+            os.system(f'start outlook.exe /a "{pdf_path}"')
+        
+            flash("Opening Outlook with invoice attached…", "success")
+            return redirect("/sales")
+
+        
+        #Whatsapp
+        @app.route("/whatsapp_invoice/<int:sale_id>")
+        @login_required
+        def whatsapp_invoice(sale_id):
+            db = get_db()
+            cursor = db.cursor(dictionary=True)
+        
+            # Get sale + items
+            cursor.execute("SELECT * FROM sales WHERE id=%s", (sale_id,))
+            sale_data = cursor.fetchone()
+        
+            cursor.execute("""
+                SELECT si.*, p.name 
+                FROM sale_items si
+                JOIN products p ON si.product_id = p.id
+                WHERE si.sale_id=%s
+            """, (sale_id,))
+            sale_items = cursor.fetchall()
+        
+            sale_data["items"] = sale_items
+        
+            # Generate PDF
+            generate_invoice_for_sale(sale_id, sale_data)
+            pdf_path = os.path.abspath(f"static/invoices/invoice_{sale_id}.pdf")
+        
+            # Get customer phone
+            cursor.execute("""
+                SELECT c.phone, c.name
+                FROM sales s
+                LEFT JOIN customers c ON s.customer_id = c.id
+                WHERE s.id=%s
+            """, (sale_id,))
+            row = cursor.fetchone()
+        
+            phone = row["phone"] if row else ""
+            customer_name = row["name"] if row else "Customer"
+        
+            message = f"Hello {customer_name}, your invoice #{sale_id} is ready."
+        
+            # Open WhatsApp Desktop
+            os.system(f'start whatsapp://send?phone={phone}&text={message}')
+        
+            # Open PDF so user can drag-drop into WhatsApp
+            os.system(f'start "" "{pdf_path}"')
+        
+            flash("Opening WhatsApp…", "success")
+            return redirect("/sales")
+
+
+    
 
 
     # -------------------------

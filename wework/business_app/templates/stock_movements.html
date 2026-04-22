@@ -51,6 +51,7 @@
         <thead>
             <tr>
                 <th>Date</th>
+				<th>User</th>
                 <th>Product</th>
                 <th>Movement</th>
                 <th>Qty</th>
@@ -63,6 +64,7 @@
             {% for m in movements %}
             <tr>
                 <td>{{ m.created_at }}</td>
+				<td>{{ m.user_name }}</td>
                 <td>{{ m.product_name }}</td>
                 <td>{{ m.movement_type }}</td>
                 <td>{{ m.quantity }}</td>

@@ -45,7 +45,7 @@ function toggleStore(storeId) {
     fetch(`/store/${storeId}/products`)
         .then(res => res.json())
         .then(data => {
-            if (data.products.length === 0) {
+            if (!data.products || data.products.length === 0) {
                 body.innerHTML = "<p class='muted'>No products in this store.</p>";
                 return;
             }
@@ -64,12 +64,15 @@ function toggleStore(storeId) {
             `;
 
             data.products.forEach(p => {
-                const total = (p.price * p.quantity).toFixed(2);
+                const qty = p.quantity ?? 0;       // safe quantity
+                const price = p.price || 0;        // safe price
+                const total = (price * qty).toFixed(2);
+
                 html += `
                     <tr>
                         <td>${p.name}</td>
-                        <td>${p.quantity}</td>
-                        <td>R ${p.price.toFixed(2)}</td>
+                        <td>${qty}</td>
+                        <td>R ${price.toFixed(2)}</td>
                         <td>R ${total}</td>
                     </tr>
                 `;
@@ -77,6 +80,10 @@ function toggleStore(storeId) {
 
             html += "</tbody></table>";
             body.innerHTML = html;
+        })
+        .catch(err => {
+            console.error("Error loading store products:", err);
+            body.innerHTML = "<p class='muted'>Failed to load products.</p>";
         });
 }
 </script>
