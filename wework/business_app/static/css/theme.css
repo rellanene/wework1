@@ -11,10 +11,8 @@
 }
 
 .top-nav {
-    position: fixed;
+    position: sticky;
     top: 0;
-    left: 0;
-    width: 100%;
     z-index: 9999;
     background: var(--lux-black);
     padding: 12px 20px;
@@ -24,9 +22,8 @@
     box-shadow: 0 2px 6px rgba(0,0,0,0.25);
 }
 
-/* Push the page content down so it doesn't hide behind the navbar */
 .main-container {
-    margin-top: 90px; /* adjust if your navbar is taller */
+    margin-top: 20px;
 }
 
 
