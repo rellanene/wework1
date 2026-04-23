@@ -18,12 +18,15 @@
         <h3>Total Sales</h3>
         <p class="stat-value">R {{ "%.2f"|format(total_sales) }}</p>
     </div>
+
+
 </div>
 
 <div class="card">
     <h3>Sales – Last 7 Days</h3>
     <canvas id="salesChart" height="80"></canvas>
 </div>
+
 
 {% else %}
 <p class="muted">Staff view – quick snapshot.</p>

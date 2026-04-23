@@ -5,6 +5,7 @@
     <title>{% block title %}Business App{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+	
 </head>
 <body class="bg-main">
     <header class="top-nav">
@@ -19,65 +20,70 @@
 		<nav>
 		    {% if session.get('user') %}
 
-		        {% if session['user']['role'] == 'owner' or permissions.can_view_dashboard %}
-		        <a href="{{ url_for('dashboard') }}">Dashboard</a>
-		        {% endif %}
+			{% if session['user']['role'] == 'owner' or permissions.can_view_dashboard %}
+			<a href="{{ url_for('dashboard') }}">Dashboard</a>
+			{% endif %}
 
-		        {% if session['user']['role'] == 'owner' or permissions.can_view_products %}
-		        <a href="{{ url_for('products') }}">Products</a>
-		        {% endif %}
+			{% if session['user']['role'] == 'owner' or permissions.can_view_products %}
+			<a href="{{ url_for('products') }}">Products</a>
+			{% endif %}
 
-		        {% if session['user']['role'] == 'owner' or permissions.can_view_customers %}
-		        <a href="{{ url_for('customers') }}">Customers</a>
-		        {% endif %}
+			{% if session['user']['role'] == 'owner' or permissions.can_view_customers %}
+			<a href="{{ url_for('customers') }}">Customers</a>
+			{% endif %}
 
-		        {% if session['user']['role'] == 'owner' or permissions.can_view_sales %}
-		        <a href="{{ url_for('sales') }}">Sales</a>
-		        {% endif %}
+			{% if session['user']['role'] == 'owner' or permissions.can_view_sales %}
+			<a href="{{ url_for('sales') }}">Sales</a>
+			{% endif %}
 
-		        {% if session['user']['role'] == 'owner' or permissions.can_view_pos %}
-		        <a href="{{ url_for('pos_page') }}">POS</a>
-		        {% endif %}
+			{% if session['user']['role'] == 'owner' or permissions.can_view_returns %}
+			<a href="{{ url_for('returns_page') }}">Returns</a>
+			{% endif %}
 
-		        {% if session['user']['role'] == 'owner' or permissions.can_view_finances %}
-		        <a href="{{ url_for('finances') }}">Finances</a>
-		        {% endif %}
+			{% if session['user']['role'] == 'owner' or permissions.can_view_pos %}
+			<a href="{{ url_for('pos_page') }}">POS</a>
+			{% endif %}
 
-		        {% if session['user']['role'] == 'owner' or permissions.can_view_reports %}
-		        <a href="{{ url_for('reports') }}">Reports</a>
-		        {% endif %}
+			{% if session['user']['role'] == 'owner' or permissions.can_view_finances %}
+			<a href="{{ url_for('finances') }}">Finances</a>
+			{% endif %}
 
-		        {% if session['user']['role'] == 'owner' or permissions.can_view_visuals %}
-		        <a href="{{ url_for('visuals') }}">Visual Dashboard</a>
-		        {% endif %}
+			{% if session['user']['role'] == 'owner' or permissions.can_view_reports %}
+			<a href="{{ url_for('reports') }}">Reports</a>
+			{% endif %}
 
-		        {% if session['user']['role'] == 'owner' or permissions.can_view_stores %}
-		        <a href="{{ url_for('stores') }}">Stores</a>
-		        {% endif %}
+			{% if session['user']['role'] == 'owner' or permissions.can_view_visuals %}
+			<a href="{{ url_for('visuals') }}">Visual Dashboard</a>
+			{% endif %}
 
-		        {% if session['user']['role'] == 'owner' or permissions.can_view_stock_in %}
-		        <a href="{{ url_for('stock_in') }}">Stock In</a>
-		        {% endif %}
+			{% if session['user']['role'] == 'owner' or permissions.can_view_stores %}
+			<a href="{{ url_for('stores') }}">Stores</a>
+			{% endif %}
 
-		        {% if session['user']['role'] == 'owner' or permissions.can_view_stock_transfer %}
-		        <a href="{{ url_for('stock_transfer') }}">Transfer</a>
-		        {% endif %}
+			{% if session['user']['role'] == 'owner' or permissions.can_view_stock_in %}
+			<a href="{{ url_for('stock_in') }}">Stock In</a>
+			{% endif %}
 
-		        {% if session['user']['role'] == 'owner' or permissions.can_view_movements %}
-		        <a href="{{ url_for('stock_movements') }}">Movements</a>
-		        {% endif %}
+			{% if session['user']['role'] == 'owner' or permissions.can_view_stock_transfer %}
+			<a href="{{ url_for('stock_transfer') }}">Transfer</a>
+			{% endif %}
 
-		        {% if session['user']['role'] == 'owner' or permissions.can_view_gallery %}
-		        <a href="{{ url_for('gallery') }}">Gallery</a>
-		        {% endif %}
+			{% if session['user']['role'] == 'owner' or permissions.can_view_movements %}
+			<a href="{{ url_for('stock_movements') }}">Movements</a>
+			{% endif %}
 
-		        {% if session['user']['role'] == 'owner' or permissions.can_view_settings %}
-		        <a href="{{ url_for('settings_page') }}">Settings</a>
-		        {% endif %}
+			{% if session['user']['role'] == 'owner' or permissions.can_view_gallery %}
+			<a href="{{ url_for('gallery') }}">Gallery</a>
+			{% endif %}
 
-		        {% if session['user']['role'] == 'owner' or permissions.can_view_profile %}
-		        <a href="{{ url_for('profile') }}">Profile</a>
-		        {% endif %}
+			{% if session['user']['role'] == 'owner' or permissions.can_view_settings %}
+			<a href="{{ url_for('settings_page') }}">Settings</a>
+			{% endif %}
+
+			{% if session['user']['role'] == 'owner' or permissions.can_view_profile %}
+			<a href="{{ url_for('profile') }}">Profile</a>
+			{% endif %}
+
 
 		        <a href="{{ url_for('logout') }}">Logout</a>
 
@@ -85,6 +91,7 @@
 		</nav>
 
     </header>
+	
 
     <main class="main-container">
         {% with messages = get_flashed_messages(with_categories=true) %}

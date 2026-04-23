@@ -451,19 +451,21 @@ def create_app():
     def dashboard():
         user = session["user"]
         business_id = user["business_id"]
-
+    
         db = get_db()
         cursor = db.cursor(dictionary=True)
-
+    
+        # Existing metrics
         cursor.execute("SELECT COUNT(*) AS total_products FROM products WHERE business_id=%s", (business_id,))
         total_products = cursor.fetchone()["total_products"]
-
+    
         cursor.execute("SELECT COUNT(*) AS total_customers FROM customers WHERE business_id=%s", (business_id,))
         total_customers = cursor.fetchone()["total_customers"]
-
+    
         cursor.execute("SELECT IFNULL(SUM(total_amount),0) AS total_sales FROM sales WHERE business_id=%s", (business_id,))
         total_sales = cursor.fetchone()["total_sales"]
-
+    
+        # Sales chart (existing)
         cursor.execute("""
             SELECT DATE(created_at) AS day, IFNULL(SUM(total_amount),0) AS total
             FROM sales
@@ -475,7 +477,17 @@ def create_app():
         rows = cursor.fetchall()
         chart_labels = [str(r["day"]) for r in rows][::-1]
         chart_values = [float(r["total"]) for r in rows][::-1]
-
+    
+        # NEW: Returns widget data
+        cursor.execute("""
+            SELECT 
+                COUNT(*) AS total_returns,
+                IFNULL(SUM(total_refund), 0) AS total_refund_amount
+            FROM returns
+            WHERE business_id=%s
+        """, (business_id,))
+        returns_data = cursor.fetchone()
+    
         return render_template(
             "dashboard.html",
             user=user,
@@ -483,8 +495,10 @@ def create_app():
             total_customers=total_customers,
             total_sales=total_sales,
             chart_labels=chart_labels,
-            chart_values=chart_values
+            chart_values=chart_values,
+            returns_data=returns_data  # <-- NEW
         )
+
 
     # -------------------------
     # PROFILE
@@ -621,6 +635,286 @@ def create_app():
             return redirect(url_for("stock_in"))
     
         return render_template("stock_in.html", products=products_list, stores=stores_list)
+    
+    #-----------------ROUTE: returns page
+# -------------------- ROUTE: Returns Page
+    @app.route("/returns")
+    @login_required
+    def returns_page():
+        return render_template("returns.html")
+    
+    
+    # -------------------- ROUTE: Load invoice + items
+    @app.route("/returns/load/<invoice>")
+    @login_required
+    def load_invoice(invoice):
+        business_id = session["user"]["business_id"]
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("""
+            SELECT 
+                s.id,
+                s.id AS invoice_number,
+                s.created_at AS date,
+                s.store_id,
+                st.name AS store_name,
+                c.name AS customer_name
+            FROM sales s
+            JOIN stores st ON st.id = s.store_id
+            LEFT JOIN customers c ON c.id = s.customer_id
+            WHERE s.id=%s AND s.business_id=%s
+        """, (invoice, business_id))
+    
+        sale = cursor.fetchone()
+        
+        # 0️⃣ Prevent duplicate returns for the same invoice
+        cursor.execute("""
+            SELECT id 
+            FROM returns 
+            WHERE sale_id=%s AND business_id=%s
+            LIMIT 1
+        """, (invoice, business_id))
+        
+        existing = cursor.fetchone()
+        
+        if existing:
+            return jsonify({
+                "status": "error",
+                "message": "A return has already been processed for this invoice."
+            }), 400
+
+    
+        if not sale:
+            return jsonify({"success": False, "message": "Invoice not found."})
+    
+        cursor.execute("""
+            SELECT si.product_id, p.name, si.quantity
+            FROM sale_items si
+            JOIN products p ON p.id = si.product_id
+            WHERE si.sale_id=%s
+        """, (sale["id"],))
+    
+        items = cursor.fetchall()
+    
+        return jsonify({
+            "success": True,
+            "customer": sale["customer_name"],
+            "date": sale["date"],
+            "store": sale["store_name"],
+            "items": items
+        })
+
+
+# -------------------- ROUTE: Process the return
+    @app.route("/returns/process/<invoice>", methods=["POST"])
+    @login_required
+    def process_return(invoice):
+        data = request.get_json()
+        items = data.get("items", [])
+    
+        if not items:
+            return jsonify({"success": False, "message": "No items selected."})
+    
+        user = session["user"]
+        business_id = user["business_id"]
+        user_id = user["id"]
+    
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        # Load sale
+        cursor.execute("""
+            SELECT id, store_id
+            FROM sales
+            WHERE id=%s AND business_id=%s
+        """, (invoice, business_id))
+    
+        sale = cursor.fetchone()
+    
+        if not sale:
+            return jsonify({"success": False, "message": "Invoice not found."})
+    
+        store_id = sale["store_id"]
+        
+        
+    
+        # 1️⃣ Create return record (temporary reference)
+        # DEBUG — see what DB and table Flask is REALLY using
+        cursor.execute("SELECT DATABASE()")
+        print("ACTIVE DB:", cursor.fetchone())
+        
+        cursor.execute("SHOW COLUMNS FROM returns")
+        print("COLUMNS:", cursor.fetchall())
+
+        cursor.execute("""
+            INSERT INTO returns (
+                business_id,
+                sale_id,
+                store_id,
+                user_id,
+                total_refund,
+                reference
+            )
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (business_id, sale["id"], store_id, user_id, 0, ""))
+
+
+    
+        return_id = cursor.lastrowid
+        db.commit() 
+    
+        # Generate proper reference
+        reference = f"RETURN-{return_id}"
+    
+        cursor.execute("""
+            UPDATE returns
+            SET reference=%s
+            WHERE id=%s
+        """, (reference, return_id))
+    
+        total_refund = 0
+    
+        # 2️⃣ Process each returned item
+        for item in items:
+            product_id = item["product_id"]
+            qty = int(item["quantity"])
+    
+            cursor.execute("SELECT price FROM products WHERE id=%s", (product_id,))
+            product = cursor.fetchone()
+    
+            if not product:
+                continue
+    
+            price = product["price"]
+            total_refund += price * qty
+    
+            # Add stock back
+            cursor.execute("""
+                INSERT INTO stock_levels (business_id, product_id, store_id, quantity)
+                VALUES (%s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)
+            """, (business_id, product_id, store_id, qty))
+    
+            # Insert stock movement
+            cursor.execute("""
+                INSERT INTO stock_movements
+                (business_id, product_id, movement_type, quantity, to_store_id, user_id)
+                VALUES (%s, %s, 'return', %s, %s, %s)
+            """, (business_id, product_id, qty, store_id, user_id))
+
+
+    
+            # Save return item
+            cursor.execute("""
+                INSERT INTO return_items (return_id, product_id, quantity, price)
+                VALUES (%s, %s, %s, %s)
+            """, (return_id, product_id, qty, price))
+    
+        # 3️⃣ Finance entry (negative sale)
+        cursor.execute("""
+            INSERT INTO finances (business_id, type, amount, reference, user_id)
+            VALUES (%s, 'return', %s, %s, %s)
+        """, (business_id, -total_refund, reference, user_id))
+    
+        # 4️⃣ Update total_refund in returns table
+        cursor.execute("""
+            UPDATE returns
+            SET total_refund=%s
+            WHERE id=%s
+        """, (total_refund, return_id))
+    
+        db.commit()
+    
+        return jsonify({"success": True, "return_id": return_id})
+    
+    
+    # -------------------- ROUTE: Return Document (HTML)
+    @app.route("/returns/document/<int:return_id>")
+    @login_required
+    def return_document(return_id):
+        business_id = session["user"]["business_id"]
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("""
+            SELECT 
+                r.id,
+                r.created_at AS date,
+                r.total_refund,
+                s.id AS invoice_number,
+                c.name AS customer_name,
+                st.name AS store_name,
+                u.name AS user_name
+            FROM returns r
+            JOIN sales s ON s.id = r.sale_id
+            LEFT JOIN customers c ON c.id = s.customer_id
+            JOIN stores st ON st.id = s.store_id
+            JOIN users u ON u.id = r.user_id
+            WHERE r.id=%s AND r.business_id=%s
+        """, (return_id, business_id))
+    
+        ret = cursor.fetchone()
+    
+        cursor.execute("""
+            SELECT ri.quantity, ri.price, p.name
+            FROM return_items ri
+            JOIN products p ON p.id = ri.product_id
+            WHERE ri.return_id=%s
+        """, (return_id,))
+    
+        items = cursor.fetchall()
+    
+        return render_template("return_document.html", ret=ret, items=items)
+    
+    
+    # -------------------- ROUTE: Generate PDF
+    @app.route("/returns/document/<int:return_id>/pdf")
+    @login_required
+    def return_document_pdf(return_id):
+        business_id = session["user"]["business_id"]
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("""
+            SELECT 
+                r.id,
+                r.created_at AS date,
+                r.reference,
+                r.total_refund,
+                s.id AS invoice_number,
+                c.name AS customer_name,
+                st.name AS store_name,
+                u.name AS user_name
+            FROM returns r
+            JOIN sales s ON s.id = r.sale_id
+            LEFT JOIN customers c ON c.id = s.customer_id
+            JOIN stores st ON st.id = s.store_id
+            JOIN users u ON u.id = r.user_id
+            WHERE r.id=%s AND r.business_id=%s
+        """, (return_id, business_id))
+    
+        ret = cursor.fetchone()
+    
+        cursor.execute("""
+            SELECT ri.quantity, ri.price, p.name
+            FROM return_items ri
+            JOIN products p ON p.id = ri.product_id
+            WHERE ri.return_id=%s
+        """, (return_id,))
+    
+        items = cursor.fetchall()
+    
+        html = render_template("return_document.html", ret=ret, items=items)
+        pdf = generate_pdf(html)
+    
+        return pdf
+
+
+
+
+
+
 
 
     # -------------------------
