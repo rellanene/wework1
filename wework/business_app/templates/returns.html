@@ -43,6 +43,10 @@
 </div>
 
 <script>
+
+// -------------------------------
+// LOAD INVOICE
+// -------------------------------
 document.getElementById("invoiceForm").addEventListener("submit", function(e) {
     e.preventDefault();
 
@@ -52,6 +56,7 @@ document.getElementById("invoiceForm").addEventListener("submit", function(e) {
         .then(res => res.json())
         .then(data => {
             if (!data.success) {
+                showPopup(data.message, "error");
                 document.getElementById("invoiceError").innerText = data.message;
                 document.getElementById("invoiceError").style.display = "block";
                 return;
@@ -71,8 +76,12 @@ document.getElementById("invoiceForm").addEventListener("submit", function(e) {
                         <td>${item.name}</td>
                         <td>${item.quantity}</td>
                         <td>
-                            <input type="number" min="0" max="${item.quantity}" 
-                                   id="return_${item.product_id}" value="0">
+                            <input type="number" 
+                                   min="0" 
+                                   max="${item.quantity}" 
+                                   value="0"
+                                   id="return_${item.product_id}"
+                                   onchange="validateReturnQty(this, ${item.quantity})">
                         </td>
                     </tr>
                 `;
@@ -82,9 +91,23 @@ document.getElementById("invoiceForm").addEventListener("submit", function(e) {
         });
 });
 
+// -------------------------------
+// VALIDATE RETURN QTY
+// -------------------------------
+function validateReturnQty(input, soldQty) {
+    const returnQty = parseFloat(input.value) || 0;
+
+    if (returnQty > soldQty) {
+        showPopup("Return quantity cannot exceed sold quantity.", "error");
+        input.value = soldQty;
+    }
+}
+
+// -------------------------------
+// SUBMIT RETURN
+// -------------------------------
 function submitReturn() {
     const invoice = document.getElementById("invoice_number").value;
-
     const rows = document.querySelectorAll("#itemsTable tr");
     let items = [];
 
@@ -94,29 +117,29 @@ function submitReturn() {
         const product_id = input.id.replace("return_", "");
 
         if (qty > 0) {
-            items.push({
-                product_id: product_id,
-                quantity: qty
-            });
+            items.push({ product_id, quantity: qty });
         }
     });
 
     fetch(`/returns/process/${invoice}`, {
         method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({items: items})
+        body: JSON.stringify({items})
     })
     .then(res => res.json())
     .then(data => {
-        if (!data.success) {
-            alert(data.message);
-            return;
-        }
 
-        alert("Return processed successfully!");
-        window.location.href = `/returns/document/${data.return_id}`;
-    });
+        showPopup(data.message, data.success ? "success" : "error");
+
+        if (data.success) {
+            setTimeout(() => {
+                window.location.href = `/returns/document/${data.return_id}`;
+            }, 1200);
+        }
+    })
+    .catch(() => showPopup("Unexpected error occurred.", "error"));
 }
+
 </script>
 
 {% endblock %}

@@ -13,85 +13,108 @@
 
         {% if session.get('user') %}
             <div class="muted" style="margin-left:16px;">
-                {{ session.user.name }} ({{ session.user.role|capitalize }}) V 01.00.1.06
+                {{ session.user.name }} ({{ session.user.role|capitalize }}) V 01.02.1.06
             </div>
         {% endif %}
+
+		{% set current = request.endpoint %}
 
 		<nav>
 		    {% if session.get('user') %}
 
-			{% if session['user']['role'] == 'owner' or permissions.can_view_dashboard %}
-			<a href="{{ url_for('dashboard') }}">Dashboard</a>
-			{% endif %}
+		        {% if session['user']['role'] == 'owner' or permissions.can_view_dashboard %}
+		        <a href="{{ url_for('dashboard') }}" class="{{ 'active-tab' if current == 'dashboard' else '' }}">Dashboard</a>
+		        {% endif %}
 
-			{% if session['user']['role'] == 'owner' or permissions.can_view_products %}
-			<a href="{{ url_for('products') }}">Products</a>
-			{% endif %}
+		        {% if session['user']['role'] == 'owner' or permissions.can_view_products %}
+		        <a href="{{ url_for('products') }}" class="{{ 'active-tab' if current == 'products' else '' }}">Products</a>
+		        {% endif %}
 
-			{% if session['user']['role'] == 'owner' or permissions.can_view_customers %}
-			<a href="{{ url_for('customers') }}">Customers</a>
-			{% endif %}
+		        {% if session['user']['role'] == 'owner' or permissions.can_view_customers %}
+		        <a href="{{ url_for('customers') }}" class="{{ 'active-tab' if current == 'customers' else '' }}">Customers</a>
+		        {% endif %}
 
-			{% if session['user']['role'] == 'owner' or permissions.can_view_sales %}
-			<a href="{{ url_for('sales') }}">Sales</a>
-			{% endif %}
+		        {% if session['user']['role'] == 'owner' or permissions.can_view_sales %}
+		        <a href="{{ url_for('sales') }}" class="{{ 'active-tab' if current == 'sales' else '' }}">Sales</a>
+		        {% endif %}
 
-			{% if session['user']['role'] == 'owner' or permissions.can_view_returns %}
-			<a href="{{ url_for('returns_page') }}">Returns</a>
-			{% endif %}
+		        {% if session['user']['role'] == 'owner' or permissions.can_view_returns %}
+		        <a href="{{ url_for('returns_page') }}" class="{{ 'active-tab' if current == 'returns_page' else '' }}">Returns</a>
+		        {% endif %}
 
-			{% if session['user']['role'] == 'owner' or permissions.can_view_pos %}
-			<a href="{{ url_for('pos_page') }}">POS</a>
-			{% endif %}
+		        {% if session['user']['role'] == 'owner' or permissions.can_view_pos %}
+		        <a href="{{ url_for('pos_page') }}" class="{{ 'active-tab' if current == 'pos_page' else '' }}">POS</a>
+		        {% endif %}
 
-			{% if session['user']['role'] == 'owner' or permissions.can_view_finances %}
-			<a href="{{ url_for('finances') }}">Finances</a>
-			{% endif %}
+		        {% if session['user']['role'] == 'owner' or permissions.can_view_finances %}
+		        <a href="{{ url_for('finances') }}" class="{{ 'active-tab' if current == 'finances' else '' }}">Finances</a>
+		        {% endif %}
 
-			{% if session['user']['role'] == 'owner' or permissions.can_view_reports %}
-			<a href="{{ url_for('reports') }}">Reports</a>
-			{% endif %}
+		        {% if session['user']['role'] == 'owner' or permissions.can_view_reports %}
+		        <a href="{{ url_for('reports') }}" class="{{ 'active-tab' if current == 'reports' else '' }}">Reports</a>
+		        {% endif %}
 
-			{% if session['user']['role'] == 'owner' or permissions.can_view_visuals %}
-			<a href="{{ url_for('visuals') }}">Visual Dashboard</a>
-			{% endif %}
+		        {% if session['user']['role'] == 'owner' or permissions.can_view_visuals %}
+		        <a href="{{ url_for('visuals') }}" class="{{ 'active-tab' if current == 'visuals' else '' }}">Visual Dashboard</a>
+		        {% endif %}
 
-			{% if session['user']['role'] == 'owner' or permissions.can_view_stores %}
-			<a href="{{ url_for('stores') }}">Stores</a>
-			{% endif %}
+		        {% if session['user']['role'] == 'owner' or permissions.can_view_stores %}
+		        <a href="{{ url_for('stores') }}" class="{{ 'active-tab' if current == 'stores' else '' }}">Stores</a>
+		        {% endif %}
 
-			{% if session['user']['role'] == 'owner' or permissions.can_view_stock_in %}
-			<a href="{{ url_for('stock_in') }}">Stock In</a>
-			{% endif %}
+		        {% if session['user']['role'] == 'owner' or permissions.can_view_stock_in %}
+		        <a href="{{ url_for('stock_in') }}" class="{{ 'active-tab' if current == 'stock_in' else '' }}">Stock In</a>
+		        {% endif %}
 
-			{% if session['user']['role'] == 'owner' or permissions.can_view_stock_transfer %}
-			<a href="{{ url_for('stock_transfer') }}">Transfer</a>
-			{% endif %}
+		        {% if session['user']['role'] == 'owner' or permissions.can_view_stock_transfer %}
+		        <a href="{{ url_for('stock_transfer') }}" class="{{ 'active-tab' if current == 'stock_transfer' else '' }}">Transfer</a>
+		        {% endif %}
 
-			{% if session['user']['role'] == 'owner' or permissions.can_view_movements %}
-			<a href="{{ url_for('stock_movements') }}">Movements</a>
-			{% endif %}
+		        {% if session['user']['role'] == 'owner' or permissions.can_view_movements %}
+		        <a href="{{ url_for('stock_movements') }}" class="{{ 'active-tab' if current == 'stock_movements' else '' }}">Movements</a>
+		        {% endif %}
 
-			{% if session['user']['role'] == 'owner' or permissions.can_view_gallery %}
-			<a href="{{ url_for('gallery') }}">Gallery</a>
-			{% endif %}
+		        {% if session['user']['role'] == 'owner' or permissions.can_view_gallery %}
+		        <a href="{{ url_for('gallery') }}" class="{{ 'active-tab' if current == 'gallery' else '' }}">Gallery</a>
+		        {% endif %}
 
-			{% if session['user']['role'] == 'owner' or permissions.can_view_settings %}
-			<a href="{{ url_for('settings_page') }}">Settings</a>
-			{% endif %}
+		        {% if session['user']['role'] == 'owner' or permissions.can_view_settings %}
+		        <a href="{{ url_for('settings_page') }}" class="{{ 'active-tab' if current == 'settings_page' else '' }}">Settings</a>
+		        {% endif %}
 
-			{% if session['user']['role'] == 'owner' or permissions.can_view_profile %}
-			<a href="{{ url_for('profile') }}">Profile</a>
-			{% endif %}
+		        {% if session['user']['role'] == 'owner' or permissions.can_view_profile %}
+		        <a href="{{ url_for('profile') }}" class="{{ 'active-tab' if current == 'profile' else '' }}">Profile</a>
+		        {% endif %}
 
-
-		        <a href="{{ url_for('logout') }}">Logout</a>
+		        <a href="{{ url_for('logout') }}" class="{{ 'active-tab' if current == 'logout' else '' }}">Logout</a>
 
 		    {% endif %}
 		</nav>
 
+
     </header>
-	
+	<div id="app-popup"
+	     style="display:none; position:fixed; top:20px; right:20px;
+	            background:#fff; padding:15px 20px; border-radius:10px;
+	            box-shadow:0 4px 12px rgba(0,0,0,0.25); z-index:9999;
+	            border-left:6px solid #d4af37; font-family:'Segoe UI', sans-serif;">
+	    <span id="popup-message" style="font-size:15px;"></span>
+	</div>
+
+	<script>
+	function showPopup(message, type="success") {
+	    const popup = document.getElementById("app-popup");
+	    const msg = document.getElementById("popup-message");
+
+	    msg.innerText = message;
+
+	    popup.style.borderLeftColor = type === "success" ? "#28a745" : "#dc3545";
+	    popup.style.display = "block";
+
+	    setTimeout(() => popup.style.display = "none", 3500);
+	}
+	</script>
+
 
     <main class="main-container">
         {% with messages = get_flashed_messages(with_categories=true) %}

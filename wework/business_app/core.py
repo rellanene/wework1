@@ -708,10 +708,39 @@ def create_app():
 
 # -------------------- ROUTE: Process the return
     @app.route("/returns/process/<invoice>", methods=["POST"])
-    @login_required
     def process_return(invoice):
+    
+        # ALWAYS FIRST
+        conn = get_db()
+        cursor = conn.cursor(dictionary=True)
+    
         data = request.get_json()
         items = data.get("items", [])
+    
+        # Load sold quantities
+        cursor.execute("""
+            SELECT product_id, quantity 
+            FROM sale_items 
+            WHERE sale_id=%s
+        """, (invoice,))
+        sale_items = cursor.fetchall()
+    
+        sold_lookup = {str(row["product_id"]): row["quantity"] for row in sale_items}
+    
+        # VALIDATION
+        for item in items:
+            pid = str(item["product_id"])
+            return_qty = int(item["quantity"])
+            sold_qty = int(sold_lookup.get(pid, 0))
+    
+            if return_qty > sold_qty:
+                return jsonify({
+                    "success": False,
+                    "message": "Return quantity cannot exceed sold quantity."
+                }), 400
+
+    # Continue with your normal return logic...
+
     
         if not items:
             return jsonify({"success": False, "message": "No items selected."})
