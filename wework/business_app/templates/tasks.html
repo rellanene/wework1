@@ -1,0 +1,503 @@
+{% extends "base.html" %}
+{% block title %}Tasks{% endblock %}
+{% block content %}
+
+<style>
+/* BUTTON STYLES — MATCHES YOUR APP */
+.btn-primary {
+    background: #d4af37;
+    color: #000;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.btn-primary:hover { background: #c19b2e; }
+
+.btn-secondary {
+    background: #1f2937;
+    color: #fff;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.btn-secondary:hover { background: #111827; }
+
+.btn-small {
+    padding: 5px 10px;
+    font-size: 13px;
+    border-radius: 4px;
+}
+
+/* ⭐ FULL SCREEN MODAL */
+.modal {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.55);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 999;
+    animation: fadeIn 0.25s ease-in-out;
+}
+
+/* ⭐ Fullscreen content */
+.modal-content {
+    background: #fff;
+    width: 90%;
+    height: 90%;
+    border-radius: 10px;
+    padding: 25px;
+    overflow-y: auto;
+    box-shadow: 0 0 25px rgba(0,0,0,0.35);
+    animation: slideUp 0.3s ease-out;
+}
+
+/* ⭐ Tabs */
+.tab-header {
+    display: flex;
+    border-bottom: 2px solid #ddd;
+    margin-bottom: 15px;
+}
+
+.tab-header div {
+    padding: 10px 20px;
+    cursor: pointer;
+    font-weight: 600;
+    border-bottom: 3px solid transparent;
+}
+
+.tab-header .active-tab {
+    border-bottom: 3px solid #d4af37;
+    color: #d4af37;
+}
+
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* Animations */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideUp {
+    from { transform: translateY(40px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+</style>
+
+<h1 class="page-title">Tasks</h1>
+
+<!-- Search Bar -->
+<div class="card">
+    <input type="text" id="taskSearch" class="form-control" placeholder="Search task by number or title..." onkeyup="searchTasks()">
+</div>
+
+<!-- Create Task Button -->
+{% if session['user']['role'] == 'owner' or permissions.can_create_tasks %}
+<button class="btn-primary" onclick="openCreateTaskModal()">+ Create Task</button>
+{% endif %}
+
+<!-- Archived Tasks Button -->
+<button class="btn-secondary" onclick="loadArchivedTasks()">Archived Tasks</button>
+
+<!-- Task List -->
+<div class="card">
+    <h3>Your Tasks</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Task #</th>
+                <th>Title</th>
+                <th>Status</th>
+                <th>Assigned To</th>
+                <th>Last Updated</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody id="taskTable"></tbody>
+    </table>
+</div>
+
+<!-- ============================
+     FULL SCREEN TASK MODAL
+============================= -->
+<div id="taskModal" class="modal">
+    <div class="modal-content">
+
+        <h2>Task #<span id="td_number"></span></h2>
+
+        <!-- TAB HEADERS -->
+        <div class="tab-header">
+            <div id="tabDetails" class="active-tab" onclick="switchTab('details')">Details</div>
+            <div id="tabFiles" onclick="switchTab('files')">Files</div>
+            <div id="tabComments" onclick="switchTab('comments')">Comments</div>
+        </div>
+
+        <!-- DETAILS TAB -->
+        <div id="contentDetails" class="tab-content active">
+            <p><strong>Title:</strong> <span id="td_title"></span></p>
+            <p><strong>Description:</strong> <span id="td_description"></span></p>
+
+            <label>Status</label>
+            <select id="task_status" class="form-control"></select>
+            <button class="btn-primary btn-small" onclick="updateStatus()">Update Status</button>
+
+            <p><strong>Assigned To:</strong> <span id="td_assigned"></span></p>
+
+            <button class="btn-secondary btn-small" onclick="openTransferModal()">Transfer Task</button>
+        </div>
+
+        <!-- FILES TAB -->
+        <div id="contentFiles" class="tab-content">
+            <h4>Documents</h4>
+            <input type="file" id="task_file">
+            <button class="btn-primary btn-small" onclick="uploadTaskFile()">Upload File</button>
+
+            <ul id="taskFiles"></ul>
+        </div>
+
+        <!-- COMMENTS TAB -->
+        <div id="contentComments" class="tab-content">
+            <h4>Comments</h4>
+            <textarea id="task_comment" class="form-control" placeholder="Write a comment..."></textarea>
+            <button class="btn-primary btn-small" onclick="addComment()">Post Comment</button>
+
+            <ul id="taskComments"></ul>
+        </div>
+
+        <hr>
+        <button class="btn-secondary" onclick="closeTaskModal()">Close</button>
+    </div>
+</div>
+
+<!-- ============================
+     CREATE TASK MODAL
+============================= -->
+<div id="createTaskModal" class="modal">
+    <div class="modal-content">
+        <h3>Create Task</h3>
+
+        <label>Title</label>
+        <input type="text" id="ct_title" class="form-control">
+
+        <label>Description</label>
+        <textarea id="ct_description" class="form-control"></textarea>
+
+        <label>Assign To</label>
+        <select id="ct_assign" class="form-control">
+            {% for u in users %}
+                <option value="{{ u.id }}">{{ u.name }}</option>
+            {% endfor %}
+        </select>
+
+        <button class="btn-primary" onclick="createTask()">Save Task</button>
+        <button class="btn-secondary" onclick="closeCreateTaskModal()">Cancel</button>
+    </div>
+</div>
+
+<!-- ============================
+     TRANSFER TASK MODAL
+============================= -->
+<div id="transferModal" class="modal">
+    <div class="modal-content">
+        <h3>Transfer Task</h3>
+
+        <label>Select User</label>
+        <select id="transfer_user" class="form-control">
+            {% for u in users %}
+                <option value="{{ u.id }}">{{ u.name }}</option>
+            {% endfor %}
+        </select>
+
+        <button class="btn-primary" onclick="transferTask()">Confirm Transfer</button>
+        <button class="btn-secondary" onclick="closeTransferModal()">Cancel</button>
+    </div>
+</div>
+
+<script>
+/* ============================
+   TAB SWITCHING
+============================= */
+function switchTab(tab) {
+    document.querySelectorAll('.tab-header div').forEach(el => el.classList.remove('active-tab'));
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+
+    document.getElementById("tab" + capitalize(tab)).classList.add("active-tab");
+    document.getElementById("content" + capitalize(tab)).classList.add("active");
+}
+
+function capitalize(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+/* ============================
+   POPUP SYSTEM
+============================= */
+function showPopup(message, type="success") {
+    const popup = document.getElementById("app-popup");
+    const msg = document.getElementById("popup-message");
+
+    msg.innerText = message;
+    popup.style.borderLeftColor = type === "success" ? "#28a745" : "#dc3545";
+    popup.style.display = "block";
+
+    setTimeout(() => popup.style.display = "none", 3500);
+}
+
+/* ============================
+   LOAD TASKS
+============================= */
+function loadTasks() {
+    fetch("/tasks/my")
+        .then(res => res.json())
+        .then(data => {
+            let html = "";
+            data.tasks.forEach(t => {
+                html += `
+                    <tr>
+                        <td>${t.task_number}</td>
+                        <td>${t.title}</td>
+                        <td>${t.status}</td>
+                        <td>${t.assigned_to}</td>
+                        <td>${t.updated_at}</td>
+                        <td>
+                            ${t.can_access ? `
+                                <button class="btn-primary btn-small" onclick="openTask(${t.id})">Open</button>
+                            ` : `
+                                <button class="btn-secondary btn-small" disabled>Restricted</button>
+                            `}
+                        </td>
+                    </tr>
+                `;
+            });
+            document.getElementById("taskTable").innerHTML = html;
+        });
+}
+
+/* ============================
+   LOAD ARCHIVED TASKS
+============================= */
+function loadArchivedTasks() {
+    fetch("/tasks/archived")
+        .then(res => res.json())
+        .then(data => {
+            let html = "";
+            data.tasks.forEach(t => {
+                html += `
+                    <tr>
+                        <td>${t.task_number}</td>
+                        <td>${t.title}</td>
+                        <td>${t.status}</td>
+                        <td>${t.assigned_to}</td>
+                        <td>${t.updated_at}</td>
+                        <td><button class="btn-secondary btn-small" disabled>Archived</button></td>
+                    </tr>
+                `;
+            });
+            document.getElementById("taskTable").innerHTML = html;
+        });
+}
+
+/* ============================
+   SEARCH TASKS
+============================= */
+function searchTasks() {
+    const q = document.getElementById("taskSearch").value;
+    fetch(`/tasks/search?q=${q}`)
+        .then(res => res.json())
+        .then(data => {
+            let html = "";
+            data.tasks.forEach(t => {
+                html += `
+                    <tr>
+                        <td>${t.task_number}</td>
+                        <td>${t.title}</td>
+                        <td>${t.status}</td>
+                        <td>${t.assigned_to}</td>
+                        <td>${t.updated_at}</td>
+                        <td>
+                            ${t.can_access ? `
+                                <button class="btn-primary btn-small" onclick="openTask(${t.id})">Open</button>
+                            ` : `
+                                <button class="btn-secondary btn-small" disabled>Restricted</button>
+                            `}
+                        </td>
+                    </tr>
+                `;
+            });
+            document.getElementById("taskTable").innerHTML = html;
+        });
+}
+
+/* ============================
+   OPEN TASK
+============================= */
+let currentTaskId = null;
+
+function openTask(id) {
+    currentTaskId = id;
+
+    fetch(`/tasks/${id}`)
+        .then(res => res.json())
+        .then(t => {
+            if (!t.success) return showPopup(t.message, "error");
+
+            document.getElementById("td_number").innerText = t.task.task_number;
+            document.getElementById("td_title").innerText = t.task.title;
+            document.getElementById("td_description").innerText = t.task.description;
+
+            const statusSelect = document.getElementById("task_status");
+            statusSelect.innerHTML = `
+                <option value="Pending">Pending</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Completed">Completed</option>
+            `;
+            statusSelect.value = t.task.status;
+
+            document.getElementById("td_assigned").innerText = t.task.assigned_to;
+
+            let fileHTML = "";
+            t.files.forEach(f => {
+                fileHTML += `<li><a href="/${f.path}" target="_blank">${f.filename}</a></li>`;
+            });
+            document.getElementById("taskFiles").innerHTML = fileHTML;
+
+            let commentHTML = "";
+            t.comments.forEach(c => {
+                commentHTML += `<li><strong>${c.user}:</strong> ${c.comment}</li>`;
+            });
+            document.getElementById("taskComments").innerHTML = commentHTML;
+
+            document.getElementById("taskModal").style.display = "flex";
+        });
+}
+
+function closeTaskModal() {
+    document.getElementById("taskModal").style.display = "none";
+}
+
+/* ============================
+   UPDATE STATUS
+============================= */
+function updateStatus() {
+    const status = document.getElementById("task_status").value;
+
+    fetch(`/tasks/${currentTaskId}/status`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({status})
+    })
+    .then(res => res.json())
+    .then(data => {
+        showPopup(data.message, data.success ? "success" : "error");
+        closeTaskModal();
+        loadTasks();
+    });
+}
+
+/* ============================
+   CREATE TASK
+============================= */
+function openCreateTaskModal() {
+    document.getElementById("createTaskModal").style.display = "flex";
+}
+
+function closeCreateTaskModal() {
+    document.getElementById("createTaskModal").style.display = "none";
+}
+
+function createTask() {
+    fetch("/tasks/create", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            title: document.getElementById("ct_title").value,
+            description: document.getElementById("ct_description").value,
+            assigned_to: document.getElementById("ct_assign").value
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        showPopup(data.message, data.success ? "success" : "error");
+        closeCreateTaskModal();
+        loadTasks();
+    });
+}
+
+/* ============================
+   TRANSFER TASK
+============================= */
+function openTransferModal() {
+    document.getElementById("transferModal").style.display = "flex";
+}
+
+function closeTransferModal() {
+    document.getElementById("transferModal").style.display = "none";
+}
+
+function transferTask() {
+    fetch(`/tasks/${currentTaskId}/transfer`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            new_user: document.getElementById("transfer_user").value
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        showPopup(data.message, data.success ? "success" : "error");
+        closeTransferModal();
+        loadTasks();
+    });
+}
+
+/* ============================
+   UPLOAD FILE
+============================= */
+function uploadTaskFile() {
+    const formData = new FormData();
+    formData.append("file", document.getElementById("task_file").files[0]);
+
+    fetch(`/tasks/${currentTaskId}/upload`, {
+        method: "POST",
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        showPopup(data.message, data.success ? "success" : "error");
+        loadTasks();
+    });
+}
+
+/* ============================
+   ADD COMMENT
+============================= */
+function addComment() {
+    fetch(`/tasks/${currentTaskId}/comment`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            comment: document.getElementById("task_comment").value
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        showPopup(data.message, data.success ? "success" : "error");
+        loadTasks();
+    });
+}
+
+/* ============================
+   AUTO LOAD
+============================= */
+loadTasks();
+
+</script>
+
+{% endblock %}

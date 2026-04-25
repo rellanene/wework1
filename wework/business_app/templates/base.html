@@ -13,7 +13,7 @@
 
         {% if session.get('user') %}
             <div class="muted" style="margin-left:16px;">
-                {{ session.user.name }} ({{ session.user.role|capitalize }}) V 01.02.1.06
+                {{ session.user.name }} ({{ session.user.role|capitalize }}) V 01.04.1.08
             </div>
         {% endif %}
 
@@ -40,6 +40,16 @@
 
 		        {% if session['user']['role'] == 'owner' or permissions.can_view_returns %}
 		        <a href="{{ url_for('returns_page') }}" class="{{ 'active-tab' if current == 'returns_page' else '' }}">Returns</a>
+		        {% endif %}
+
+		        {# HR BUTTON #}
+		        {% if session['user']['role'] == 'owner' or permissions.can_view_hr %}
+		        <a href="{{ url_for('human') }}" class="{{ 'active-tab' if current == 'human' else '' }}">Human</a>
+		        {% endif %}
+
+		        {# ⭐ NEW TASKS BUTTON #}
+		        {% if session['user']['role'] == 'owner' or permissions.can_view_tasks %}
+		        <a href="{{ url_for('tasks_page') }}" class="{{ 'active-tab' if current == 'tasks_page' else '' }}">Tasks</a>
 		        {% endif %}
 
 		        {% if session['user']['role'] == 'owner' or permissions.can_view_pos %}
@@ -90,6 +100,7 @@
 
 		    {% endif %}
 		</nav>
+
 
 
     </header>

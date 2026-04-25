@@ -937,12 +937,8 @@ def create_app():
         html = render_template("return_document.html", ret=ret, items=items)
         pdf = generate_pdf(html)
     
-        return pdf
-
-
-
-
-
+        return pdf 
+    
 
 
 
@@ -987,6 +983,284 @@ def create_app():
             return redirect(url_for("stock_transfer"))
     
         return render_template("stock_transfer.html", products=products_list, stores=stores_list)
+    
+ #-------------HUMAN RES-----------
+ # ------------------ Human ------------------
+    @app.route("/human")
+    @login_required
+    def human():
+        # Owner: full HR access
+        if session['user']['role'] == 'owner' or getattr(permissions, "can_view_hr", False):
+            return render_template("human.html")
+        return redirect(url_for("dashboard"))
+    
+    
+    # ------------------ HR Footprint Logger ------------------
+    def log_hr_action(user_id, action, details):
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO hr_footprint (user_id, action, details)
+            VALUES (%s, %s, %s)
+        """, (user_id, action, details))
+        conn.commit()
+    
+    
+    # ------------------ Submit Overtime ------------------
+    @app.route("/hr/overtime", methods=["POST"])
+    @login_required
+    def hr_overtime():
+        conn = get_db()
+        cursor = conn.cursor(dictionary=True)
+    
+        user_id = session["user"]["id"]
+        ot_date = request.form.get("date")
+        hours = request.form.get("hours")
+        file = request.files.get("file")
+    
+        if not ot_date or not hours:
+            return jsonify({"success": False, "message": "Date and hours are required."})
+    
+        file_path = None
+        if file and file.filename:
+            filename = secure_filename(file.filename)
+            os.makedirs("uploads/hr", exist_ok=True)
+            file_path = os.path.join("uploads/hr", filename)
+            file.save(file_path)
+    
+        cursor.execute("""
+            INSERT INTO overtime (user_id, ot_date, hours, file_path)
+            VALUES (%s, %s, %s, %s)
+        """, (user_id, ot_date, hours, file_path))
+        conn.commit()
+    
+        log_hr_action(user_id, "Overtime Submitted", f"Date: {ot_date}, Hours: {hours}")
+        return jsonify({"success": True, "message": "Overtime submitted successfully!"})
+    
+    
+    # ------------------ Submit Leave ------------------
+    @app.route("/hr/leave", methods=["POST"])
+    @login_required
+    def hr_leave():
+        conn = get_db()
+        cursor = conn.cursor(dictionary=True)
+    
+        user_id = session["user"]["id"]
+        start = request.form.get("start")
+        end = request.form.get("end")
+        leave_type = request.form.get("type")
+        file = request.files.get("file")
+    
+        if not start or not end or not leave_type:
+            return jsonify({"success": False, "message": "All fields are required."})
+    
+        file_path = None
+        if file and file.filename:
+            filename = secure_filename(file.filename)
+            os.makedirs("uploads/hr", exist_ok=True)
+            file_path = os.path.join("uploads/hr", filename)
+            file.save(file_path)
+    
+        cursor.execute("""
+            INSERT INTO leave_requests (user_id, start_date, end_date, leave_type, file_path)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (user_id, start, end, leave_type, file_path))
+        conn.commit()
+    
+        log_hr_action(user_id, "Leave Requested", f"{leave_type} from {start} to {end}")
+        return jsonify({"success": True, "message": "Leave request submitted!"})
+    
+    
+    # ------------------ Add Vacancy (Owner Only) ------------------
+    @app.route("/hr/vacancy", methods=["POST"])
+    @login_required
+    def hr_vacancy():
+        if session['user']['role'] != 'owner' and not getattr(permissions, "can_manage_vacancies", False):
+            return jsonify({"success": False, "message": "Access denied."})
+    
+        conn = get_db()
+        cursor = conn.cursor(dictionary=True)
+    
+        data = request.get_json() or {}
+        position = data.get("position")
+        description = data.get("description")
+    
+        if not position:
+            return jsonify({"success": False, "message": "Position is required."})
+    
+        cursor.execute("""
+            INSERT INTO vacancies (position, description)
+            VALUES (%s, %s)
+        """, (position, description))
+        conn.commit()
+    
+        log_hr_action(session["user"]["id"], "Vacancy Added", f"Position: {position}")
+        return jsonify({"success": True, "message": "Vacancy added!"})
+    
+    
+    # ------------------ Approve/Decline Overtime ------------------
+    @app.route("/hr/overtime/<int:ot_id>/status", methods=["POST"])
+    @login_required
+    def hr_overtime_status(ot_id):
+        if session['user']['role'] != 'owner' and not getattr(permissions, "can_approve_hr", False):
+            return jsonify({"success": False, "message": "Access denied."})
+    
+        conn = get_db()
+        cursor = conn.cursor(dictionary=True)
+    
+        data = request.get_json() or {}
+        status = data.get("status")
+    
+        if status not in ("Approved", "Declined"):
+            return jsonify({"success": False, "message": "Invalid status."})
+    
+        cursor.execute("UPDATE overtime SET status=%s WHERE id=%s", (status, ot_id))
+        conn.commit()
+    
+        log_hr_action(session["user"]["id"], "Overtime Status Changed", f"ID: {ot_id}, Status: {status}")
+        return jsonify({"success": True, "message": f"Overtime {status.lower()}."})
+    
+    
+    # ------------------ Approve/Decline Leave ------------------
+    @app.route("/hr/leave/<int:leave_id>/status", methods=["POST"])
+    @login_required
+    def hr_leave_status(leave_id):
+        if session['user']['role'] != 'owner' and not getattr(permissions, "can_approve_hr", False):
+            return jsonify({"success": False, "message": "Access denied."})
+    
+        conn = get_db()
+        cursor = conn.cursor(dictionary=True)
+    
+        data = request.get_json() or {}
+        status = data.get("status")
+    
+        if status not in ("Approved", "Declined"):
+            return jsonify({"success": False, "message": "Invalid status."})
+    
+        cursor.execute("UPDATE leave_requests SET status=%s WHERE id=%s", (status, leave_id))
+        conn.commit()
+    
+        log_hr_action(session["user"]["id"], "Leave Status Changed", f"ID: {leave_id}, Status: {status}")
+        return jsonify({"success": True, "message": f"Leave {status.lower()}."})
+    
+    
+    # ------------------ Staff HR Data ------------------
+    @app.route("/hr/my-data")
+    @login_required
+    def hr_my_data():
+        conn = get_db()
+        cursor = conn.cursor(dictionary=True)
+        user_id = session["user"]["id"]
+    
+        cursor.execute("SELECT * FROM overtime WHERE user_id=%s ORDER BY ot_date DESC", (user_id,))
+        overtime_rows = cursor.fetchall()
+    
+        cursor.execute("SELECT * FROM leave_requests WHERE user_id=%s ORDER BY start_date DESC", (user_id,))
+        leave_rows = cursor.fetchall()
+    
+        return jsonify({
+            "success": True,
+            "overtime": overtime_rows,
+            "leave": leave_rows
+        })
+    
+    
+    # ------------------ Admin HR Data ------------------
+    @app.route("/hr/admin-data")
+    @login_required
+    def hr_admin_data():
+        if session['user']['role'] != 'owner' and not getattr(permissions, "can_manage_hr", False):
+            return jsonify({"success": False, "message": "Access denied."})
+    
+        conn = get_db()
+        cursor = conn.cursor(dictionary=True)
+    
+        cursor.execute("SELECT id, name, role FROM users ORDER BY name")
+        employees = cursor.fetchall()
+    
+        cursor.execute("SELECT * FROM vacancies ORDER BY created_at DESC")
+        vacancies = cursor.fetchall()
+    
+        cursor.execute("""
+            SELECT f.*, u.name AS user_name
+            FROM hr_footprint f
+            JOIN users u ON f.user_id = u.id
+            ORDER BY f.created_at DESC
+            LIMIT 100
+        """)
+        footprint = cursor.fetchall()
+    
+        return jsonify({
+            "success": True,
+            "employees": employees,
+            "vacancies": vacancies,
+            "footprint": footprint
+        })
+        
+    #-------------Payslip Route------
+    @app.route("/hr/payslip/<int:payroll_id>")
+    @login_required
+    def hr_payslip(payroll_id):
+        conn = get_db()
+        cursor = conn.cursor(dictionary=True)
+    
+        # Load payroll record
+        cursor.execute("""
+            SELECT p.*, u.name AS employee_name, u.role AS employee_role
+            FROM payroll p
+            JOIN users u ON p.user_id = u.id
+            WHERE p.id=%s
+        """, (payroll_id,))
+        payslip = cursor.fetchone()
+    
+        if not payslip:
+            return "Payslip not found", 404
+    
+        # Access control:
+        # Owner can view all payslips
+        # Staff can only view their own
+        if session["user"]["role"] != "owner":
+            if payslip["user_id"] != session["user"]["id"]:
+                return "Access denied", 403
+    
+        # Render HTML template
+        html = render_template("payslip.html", slip=payslip)
+    
+        # Convert to PDF
+        pdf = generate_pdf(html)
+    
+        # Return PDF
+        return pdf
+    
+    #----------Load Payroll History
+    @app.route("/hr/payroll/history")
+    @login_required
+    def hr_payroll_history():
+        conn = get_db()
+        cursor = conn.cursor(dictionary=True)
+    
+        if session["user"]["role"] == "owner":
+            cursor.execute("""
+                SELECT p.*, u.name AS employee_name
+                FROM payroll p
+                JOIN users u ON p.user_id = u.id
+                ORDER BY p.year DESC, p.month DESC
+            """)
+        else:
+            cursor.execute("""
+                SELECT p.*, u.name AS employee_name
+                FROM payroll p
+                JOIN users u ON p.user_id = u.id
+                WHERE p.user_id=%s
+                ORDER BY p.year DESC, p.month DESC
+            """, (session["user"]["id"],))
+    
+        rows = cursor.fetchall()
+        return jsonify({"success": True, "rows": rows})
+
+    
+
+    
 
 
 # -------------------------
@@ -1461,11 +1735,40 @@ def create_app():
         return redirect("/reports")
     
     #-----------Load permissions, branding, configa---#
+# ============================================================
+# PERMISSIONS LOADER
+# ============================================================
     def get_permissions(user_id):
         db = get_db()
         cursor = db.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM user_permissions WHERE user_id = %s", (user_id,))
-        return cursor.fetchone()
+        cursor.execute("SELECT * FROM user_permissions WHERE user_id=%s", (user_id,))
+        row = cursor.fetchone() or {}
+    
+        return {
+            # System permissions
+            "can_view_dashboard": bool(row.get("can_view_dashboard")),
+            "can_view_products": bool(row.get("can_view_products")),
+            "can_view_customers": bool(row.get("can_view_customers")),
+            "can_view_sales": bool(row.get("can_view_sales")),
+            "can_view_finances": bool(row.get("can_view_finances")),
+            "can_view_visuals": bool(row.get("can_view_visuals")),
+            "can_view_stores": bool(row.get("can_view_stores")),
+            "can_view_stock_in": bool(row.get("can_view_stock_in")),
+            "can_view_stock_transfer": bool(row.get("can_view_stock_transfer")),
+            "can_view_movements": bool(row.get("can_view_movements")),
+            "can_view_gallery": bool(row.get("can_view_gallery")),
+            "can_view_settings": bool(row.get("can_view_settings")),
+    
+            # HR permissions
+            "can_view_hr": bool(row.get("can_view_hr")),
+            "can_submit_overtime": bool(row.get("can_submit_overtime")),
+            "can_submit_leave": bool(row.get("can_submit_leave")),
+            "can_manage_vacancies": bool(row.get("can_manage_vacancies")),
+            "can_approve_hr": bool(row.get("can_approve_hr")),
+            "can_run_payroll": bool(row.get("can_run_payroll")),
+            "can_view_payslips": bool(row.get("can_view_payslips")),
+        }
+
     
 
     def get_branding(business_id):
@@ -1484,38 +1787,48 @@ def create_app():
         return row
     
     #--------------MAIN SETTINGS PAGE ROUTE
+    # ============================================================
+# MAIN SETTINGS PAGE
+# ============================================================
     @app.route("/settings")
     @login_required
     def settings_page():
         db = get_db()
         cursor = db.cursor(dictionary=True)
     
-        # ⭐ Do NOT load the owner
+        business_id = session["user"]["business_id"]
+    
+        # Load staff (exclude owner)
         cursor.execute("""
-            SELECT * FROM users 
-            WHERE business_id=%s AND role != 'owner'
-        """, (session["user"]["business_id"],))
+            SELECT * FROM users
+            WHERE business_id=%s AND role!='owner'
+        """, (business_id,))
         users = cursor.fetchall()
     
-        cursor.execute("SELECT * FROM branding WHERE business_id=%s", (session["user"]["business_id"],))
+        cursor.execute("SELECT * FROM business_branding WHERE business_id=%s", (business_id,))
         branding = cursor.fetchone()
     
-        cursor.execute("SELECT * FROM business_config WHERE business_id=%s", (session["user"]["business_id"],))
+        cursor.execute("SELECT * FROM business_config WHERE business_id=%s", (business_id,))
         config = cursor.fetchone()
     
         return render_template("settings.html", users=users, branding=branding, config=config)
 
+
         
      #----------SAVE USER PERMISSIONS
-    @app.route("/settings/permissions", methods=["POST"])
+# ============================================================
+# SAVE USER PERMISSIONS (AJAX)
+# ============================================================
+    @app.route("/settings/permissions/<int:user_id>", methods=["POST"])
     @login_required
-    def settings_permissions():
+    def save_user_permissions(user_id):
         db = get_db()
-        cursor = db.cursor(dictionary=True)
+        cursor = db.cursor()
     
-        user_id = request.form.get("user_id")
+        data = request.get_json() or {}
     
         fields = [
+            # System permissions
             "can_view_dashboard",
             "can_view_products",
             "can_view_customers",
@@ -1527,40 +1840,48 @@ def create_app():
             "can_view_stock_transfer",
             "can_view_movements",
             "can_view_gallery",
-            "can_view_settings"
+            "can_view_settings",
+    
+            # HR permissions
+            "can_view_hr",
+            "can_submit_overtime",
+            "can_submit_leave",
+            "can_manage_vacancies",
+            "can_approve_hr",
+            "can_run_payroll",
+            "can_view_payslips"
         ]
     
-        values = [request.form.get(f) for f in fields]
+        values = [int(data.get(f, False)) for f in fields]
     
-        # Check if permissions exist
-        cursor.execute("SELECT id FROM user_permissions WHERE user_id = %s", (user_id,))
+        cursor.execute("SELECT id FROM user_permissions WHERE user_id=%s", (user_id,))
         exists = cursor.fetchone()
     
         if exists:
-            # Update
             sql = f"""
-                UPDATE user_permissions SET 
+                UPDATE user_permissions SET
                 {", ".join([f"{f}=%s" for f in fields])}
-                WHERE user_id = %s
+                WHERE user_id=%s
             """
             cursor.execute(sql, (*values, user_id))
         else:
-            # Insert
             sql = f"""
-                INSERT INTO user_permissions 
+                INSERT INTO user_permissions
                 (user_id, {", ".join(fields)})
                 VALUES (%s, {", ".join(["%s"] * len(fields))})
             """
             cursor.execute(sql, (user_id, *values))
     
         db.commit()
-        flash("Permissions updated successfully.", "success")
-        return redirect("/settings")
+    
+        return jsonify({"success": True, "message": "Permissions updated successfully!"})
+
     
    
     #-----------SAVE BRANDING (LOGO + COLORS + BUSINESS NAME)    
-  
-
+# ============================================================
+# SAVE BRANDING
+# ============================================================
     @app.route("/settings/branding", methods=["POST"])
     @login_required
     def settings_branding():
@@ -1582,8 +1903,7 @@ def create_app():
             logo_file.save(save_path)
             logo_path = f"/static/uploads/logos/{filename}"
     
-        # Check if branding exists
-        cursor.execute("SELECT id FROM business_branding WHERE business_id = %s", (business_id,))
+        cursor.execute("SELECT id FROM business_branding WHERE business_id=%s", (business_id,))
         exists = cursor.fetchone()
     
         if exists:
@@ -1608,9 +1928,13 @@ def create_app():
         db.commit()
         flash("Branding updated successfully.", "success")
         return redirect("/settings")
+
     
     
     #-------------SAVE BUSINESS CONFIGURATION
+# ============================================================
+# SAVE BUSINESS CONFIG
+# ============================================================
     @app.route("/settings/config", methods=["POST"])
     @login_required
     def settings_config():
@@ -1624,7 +1948,7 @@ def create_app():
         invoice_prefix = request.form.get("invoice_prefix")
         enable_vat = request.form.get("enable_vat")
     
-        cursor.execute("SELECT id FROM business_config WHERE business_id = %s", (business_id,))
+        cursor.execute("SELECT id FROM business_config WHERE business_id=%s", (business_id,))
         exists = cursor.fetchone()
     
         if exists:
@@ -1642,6 +1966,7 @@ def create_app():
         db.commit()
         flash("Business configuration updated successfully.", "success")
         return redirect("/settings")
+
 
 
 
@@ -1688,7 +2013,352 @@ def create_app():
             vat_amount=sale["vat_amount"],
             total_amount=sale["total_amount"],
             cashier_name=cashier_name
-        )   
+        )
+        
+    #----------------TASK PAGE---------
+    # ============================================================
+# TASKS MODULE
+# ============================================================
+    @app.route("/tasks")
+    @login_required
+    def tasks_page():
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        business_id = session["user"]["business_id"]
+    
+        # Load all users for assignment dropdown
+        cursor.execute("""
+            SELECT id, name 
+            FROM users 
+            WHERE business_id=%s
+            ORDER BY name
+        """, (business_id,))
+        users = cursor.fetchall()
+    
+        return render_template("tasks.html", users=users)
+
+
+    import random
+    
+    from werkzeug.utils import secure_filename
+    
+    
+    # Generate 6-digit task number
+    def generate_task_number():
+        return str(random.randint(100000, 999999))
+    
+    
+    # ============================================================
+    # GET MY TASKS
+    # ============================================================
+    @app.route("/tasks/my")
+    @login_required
+    def tasks_my():
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        user_id = session["user"]["id"]
+    
+        cursor.execute("""
+            SELECT t.*, u.name AS assigned_to
+            FROM tasks t
+            JOIN users u ON u.id = t.assigned_to
+            WHERE t.assigned_to=%s AND t.archived=0
+            ORDER BY t.updated_at DESC
+        """, (user_id,))
+    
+        tasks = cursor.fetchall()
+    
+        for t in tasks:
+            t["can_access"] = True
+    
+        return jsonify({"success": True, "tasks": tasks})
+
+    
+    
+    # ============================================================
+    # SEARCH TASKS
+    # ============================================================
+    @app.route("/tasks/search")
+    @login_required
+    def tasks_search():
+        q = request.args.get("q", "")
+        user_id = session["user"]["id"]
+    
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("""
+            SELECT t.*, u.name AS assigned_to
+            FROM tasks t
+            JOIN users u ON u.id = t.assigned_to
+            WHERE t.task_number LIKE %s OR t.title LIKE %s
+            ORDER BY t.updated_at DESC
+        """, (f"%{q}%", f"%{q}%"))
+    
+        tasks = cursor.fetchall()
+    
+        # User can only open their own tasks
+        for t in tasks:
+            t["can_access"] = (t["assigned_to"] == session["user"]["name"])
+    
+        return jsonify({"success": True, "tasks": tasks})
+    
+    
+    # ============================================================
+    # CREATE TASK
+    # ============================================================
+    @app.route("/tasks/create", methods=["POST"])
+    @login_required
+    def tasks_create():
+        data = request.get_json() or {}
+    
+        title = data.get("title")
+        description = data.get("description")
+        assigned_to = data.get("assigned_to")
+    
+        if not title or not assigned_to:
+            return jsonify({"success": False, "message": "Title and assigned user required."})
+    
+        task_number = generate_task_number()
+    
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("""
+            INSERT INTO tasks (task_number, title, description, assigned_to, created_by)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (task_number, title, description, assigned_to, session["user"]["id"]))
+    
+        db.commit()
+    
+        return jsonify({"success": True, "message": "Task created successfully!"})
+    
+    
+    # ============================================================
+    # GET TASK DETAILS
+    # ============================================================
+    @app.route("/tasks/<int:task_id>")
+    @login_required
+    def tasks_details(task_id):
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        user_id = session["user"]["id"]
+    
+        # Load task
+        cursor.execute("""
+            SELECT t.*, u.name AS assigned_to_name
+            FROM tasks t
+            JOIN users u ON u.id = t.assigned_to
+            WHERE t.id=%s
+        """, (task_id,))
+        task = cursor.fetchone()
+    
+        if not task:
+            return jsonify({"success": False, "message": "Task not found."})
+    
+        # Access control
+        if task["assigned_to"] != user_id and session["user"]["role"] != "owner":
+            return jsonify({"success": False, "message": "Access denied."})
+    
+        # Load files
+        cursor.execute("""
+            SELECT * FROM task_files WHERE task_id=%s
+        """, (task_id,))
+        files = cursor.fetchall()
+    
+        # Load comments
+        cursor.execute("""
+            SELECT c.*, u.name AS user
+            FROM task_comments c
+            JOIN users u ON u.id = c.user_id
+            WHERE c.task_id=%s
+            ORDER BY c.created_at DESC
+        """, (task_id,))
+        comments = cursor.fetchall()
+    
+        return jsonify({
+            "success": True,
+            "task": {
+                "id": task["id"],
+                "task_number": task["task_number"],
+                "title": task["title"],
+                "description": task["description"],
+                "status": task["status"],
+                "assigned_to": task["assigned_to_name"]
+            },
+            "files": files,
+            "comments": comments
+        })
+    
+    
+    # ============================================================
+    # TRANSFER TASK
+    # ============================================================
+    @app.route("/tasks/<int:task_id>/transfer", methods=["POST"])
+    @login_required
+    def tasks_transfer(task_id):
+        data = request.get_json() or {}
+        new_user = data.get("new_user")
+    
+        if not new_user:
+            return jsonify({"success": False, "message": "Select a user to transfer to."})
+    
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        # Only owner or current assignee can transfer
+        cursor.execute("SELECT assigned_to FROM tasks WHERE id=%s", (task_id,))
+        row = cursor.fetchone()
+    
+        if not row:
+            return jsonify({"success": False, "message": "Task not found."})
+    
+        if row["assigned_to"] != session["user"]["id"] and session["user"]["role"] != "owner":
+            return jsonify({"success": False, "message": "Access denied."})
+    
+        cursor.execute("""
+            UPDATE tasks SET assigned_to=%s WHERE id=%s
+        """, (new_user, task_id))
+    
+        db.commit()
+    
+        return jsonify({"success": True, "message": "Task transferred successfully!"})
+    
+    
+    # ============================================================
+    # UPLOAD FILE
+    # ============================================================
+    @app.route("/tasks/<int:task_id>/upload", methods=["POST"])
+    @login_required
+    def tasks_upload(task_id):
+        file = request.files.get("file")
+    
+        if not file:
+            return jsonify({"success": False, "message": "No file uploaded."})
+    
+        filename = secure_filename(file.filename)
+        os.makedirs("uploads/tasks", exist_ok=True)
+        path = os.path.join("uploads/tasks", filename)
+        file.save(path)
+    
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("""
+            INSERT INTO task_files (task_id, filename, path)
+            VALUES (%s, %s, %s)
+        """, (task_id, filename, path))
+    
+        db.commit()
+    
+        return jsonify({"success": True, "message": "File uploaded successfully!"})
+    
+    
+    # ============================================================
+    # ADD COMMENT
+    # ============================================================
+    @app.route("/tasks/<int:task_id>/comment", methods=["POST"])
+    @login_required
+    def tasks_comment(task_id):
+        data = request.get_json() or {}
+        comment = data.get("comment")
+    
+        if not comment:
+            return jsonify({"success": False, "message": "Comment cannot be empty."})
+    
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        # Check if user can view the task
+        cursor.execute("SELECT assigned_to FROM tasks WHERE id=%s", (task_id,))
+        task = cursor.fetchone()
+    
+        if not task:
+            return jsonify({"success": False, "message": "Task not found."})
+    
+        # Owner can comment on all tasks
+        # Other users can comment only if they can view the task
+        if session["user"]["role"] != "owner" and task["assigned_to"] != session["user"]["id"]:
+            return jsonify({"success": False, "message": "Access denied."})
+    
+        cursor.execute("""
+            INSERT INTO task_comments (task_id, user_id, comment)
+            VALUES (%s, %s, %s)
+        """, (task_id, session["user"]["id"], comment))
+    
+        db.commit()
+    
+        return jsonify({"success": True, "message": "Comment added!"})
+
+    
+    #---------------Update Task Status----
+    @app.route("/tasks/<int:task_id>/status", methods=["POST"])
+    @login_required
+    def tasks_update_status(task_id):
+        user_id = session["user"]["id"]   # ⭐ FIXED LINE
+    
+        data = request.get_json() or {}
+        new_status = data.get("status")
+    
+        if new_status not in ("Pending", "In Progress", "Completed"):
+            return jsonify({"success": False, "message": "Invalid status."})
+    
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        # Load task
+        cursor.execute("SELECT assigned_to FROM tasks WHERE id=%s", (task_id,))
+        task = cursor.fetchone()
+    
+        if not task:
+            return jsonify({"success": False, "message": "Task not found."})
+    
+        # Only owner or assigned user can update status
+        if task["assigned_to"] != user_id and session["user"]["role"] != "owner":
+            return jsonify({"success": False, "message": "Access denied."})
+    
+        # Update status + archive if completed
+        cursor.execute("""
+            UPDATE tasks 
+            SET status=%s, archived=%s 
+            WHERE id=%s
+        """, (new_status, 1 if new_status == "Completed" else 0, task_id))
+    
+        db.commit()
+    
+        return jsonify({"success": True, "message": "Status updated!"})
+
+    
+    #------------------Load Archived Tasks
+    @app.route("/tasks/archived")
+    @login_required
+    def tasks_archived():
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("""
+            SELECT t.*, u.name AS assigned_to
+            FROM tasks t
+            JOIN users u ON u.id = t.assigned_to
+            WHERE t.archived=1
+            ORDER BY t.updated_at DESC
+        """)
+    
+        tasks = cursor.fetchall()
+    
+        return jsonify({"success": True, "tasks": tasks})
+    
+    @app.route("/tasks/archived/page")
+    @login_required
+    def tasks_archived_page():
+        return render_template("tasks_archived.html")
+
+
+
+       
 
     # -------------------------
     # STOCK MOVEMENTS HISTORY (optional view)

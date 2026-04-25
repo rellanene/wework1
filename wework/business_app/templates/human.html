@@ -1,0 +1,481 @@
+{% extends "base.html" %}
+{% block title %}Human Resources{% endblock %}
+{% block content %}
+
+<h1 class="page-title">Human Resources</h1>
+
+{% if session['user']['role'] == 'owner' %}
+<div class="dashboard-row">
+    <div class="card kpi-card">
+        <h3>Pending Overtime</h3>
+        <p id="kpi_overtime" class="kpi-number">0</p>
+    </div>
+
+    <div class="card kpi-card">
+        <h3>Pending Leave</h3>
+        <p id="kpi_leave" class="kpi-number">0</p>
+    </div>
+
+    <div class="card kpi-card">
+        <h3>Open Vacancies</h3>
+        <p id="kpi_vacancies" class="kpi-number">0</p>
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <h3>HR Overview</h3>
+    <p>Manage overtime, leave requests, payroll, vacancies and employee records.</p>
+</div>
+
+{% if session['user']['role'] == 'owner' %}
+<!-- ============================
+     OWNER FULL HR DASHBOARD
+============================= -->
+
+<div class="card">
+    <h3>Overtime Requests</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Employee</th>
+                <th>Date</th>
+                <th>Hours</th>
+                <th>File</th>
+                <th>Status</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody id="adminOvertimeTable"></tbody>
+    </table>
+</div>
+
+<div class="card">
+    <h3>Leave Requests</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Employee</th>
+                <th>Dates</th>
+                <th>Type</th>
+                <th>File</th>
+                <th>Status</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody id="adminLeaveTable"></tbody>
+    </table>
+</div>
+
+<div class="card">
+    <h3>Job Vacancies</h3>
+    <button class="btn-primary" onclick="openVacancyModal()">Add Vacancy</button>
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Position</th>
+                <th>Status</th>
+                <th>Applicants</th>
+            </tr>
+        </thead>
+        <tbody id="vacanciesTable"></tbody>
+    </table>
+</div>
+
+<div class="card">
+    <h3>Payroll</h3>
+
+    <label>Month</label>
+    <select id="payroll_month">
+        <option value="1">January</option>
+        <option value="2">February</option>
+        <option value="3">March</option>
+        <option value="4">April</option>
+        <option value="5">May</option>
+        <option value="6">June</option>
+        <option value="7">July</option>
+        <option value="8">August</option>
+        <option value="9">September</option>
+        <option value="10">October</option>
+        <option value="11">November</option>
+        <option value="12">December</option>
+    </select>
+
+    <label>Year</label>
+    <input type="number" id="payroll_year" value="2026">
+
+    <button class="btn-primary" onclick="runPayroll()">Run Payroll</button>
+</div>
+
+{% else %}
+<!-- ============================
+     STAFF LIMITED VIEW
+============================= -->
+
+<div class="card">
+    <h3>Your HR Summary</h3>
+    <p><strong>Name:</strong> {{ session.user.name }}</p>
+    <p><strong>Role:</strong> {{ session.user.role|capitalize }}</p>
+</div>
+
+<div class="card">
+    <h3>Your Overtime</h3>
+    <button class="btn-primary" onclick="openOvertimeModal()">Submit Overtime</button>
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Hours</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody id="myOvertimeTable"></tbody>
+    </table>
+</div>
+
+<div class="card">
+    <h3>Your Leave Requests</h3>
+    <button class="btn-primary" onclick="openLeaveModal()">Request Leave</button>
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Dates</th>
+                <th>Type</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody id="myLeaveTable"></tbody>
+    </table>
+</div>
+
+{% endif %}
+
+<!-- ============================
+     MODALS (OVERTIME, LEAVE, VACANCY)
+============================= -->
+
+<!-- Overtime Modal -->
+<div id="overtimeModal" class="modal" style="display:none;">
+    <div class="modal-content">
+        <h3>Submit Overtime</h3>
+        <label>Date</label>
+        <input type="date" id="ot_date">
+
+        <label>Hours</label>
+        <input type="number" id="ot_hours" min="1">
+
+        <label>Supporting Document (optional)</label>
+        <input type="file" id="ot_file">
+
+        <button class="btn-primary" onclick="submitOvertime()">Submit</button>
+        <button class="btn-secondary" onclick="closeOvertimeModal()">Cancel</button>
+    </div>
+</div>
+
+<!-- Leave Modal -->
+<div id="leaveModal" class="modal" style="display:none;">
+    <div class="modal-content">
+        <h3>Request Leave</h3>
+
+        <label>Start Date</label>
+        <input type="date" id="leave_start">
+
+        <label>End Date</label>
+        <input type="date" id="leave_end">
+
+        <label>Type</label>
+        <select id="leave_type">
+            <option value="Annual">Annual Leave</option>
+            <option value="Sick">Sick Leave</option>
+            <option value="Family">Family Responsibility</option>
+        </select>
+
+        <label>Supporting Document (optional)</label>
+        <input type="file" id="leave_file">
+
+        <button class="btn-primary" onclick="submitLeave()">Submit</button>
+        <button class="btn-secondary" onclick="closeLeaveModal()">Cancel</button>
+    </div>
+</div>
+
+<!-- Vacancy Modal -->
+<div id="vacancyModal" class="modal" style="display:none;">
+    <div class="modal-content">
+        <h3>Add Job Vacancy</h3>
+
+        <label>Position</label>
+        <input type="text" id="vac_position">
+
+        <label>Description</label>
+        <textarea id="vac_description"></textarea>
+
+        <button class="btn-primary" onclick="submitVacancy()">Save</button>
+        <button class="btn-secondary" onclick="closeVacancyModal()">Cancel</button>
+    </div>
+</div>
+
+<script>
+// ============================
+// POPUP (same as returns.html)
+// ============================
+function showPopup(message, type="success") {
+    const popup = document.getElementById("app-popup");
+    const msg = document.getElementById("popup-message");
+
+    msg.innerText = message;
+    popup.style.borderLeftColor = type === "success" ? "#28a745" : "#dc3545";
+    popup.style.display = "block";
+
+    setTimeout(() => popup.style.display = "none", 3500);
+}
+
+// ============================
+// MODAL CONTROLS
+// ============================
+function openOvertimeModal() { document.getElementById("overtimeModal").style.display = "block"; }
+function closeOvertimeModal() { document.getElementById("overtimeModal").style.display = "none"; }
+
+function openLeaveModal() { document.getElementById("leaveModal").style.display = "block"; }
+function closeLeaveModal() { document.getElementById("leaveModal").style.display = "none"; }
+
+function openVacancyModal() { document.getElementById("vacancyModal").style.display = "block"; }
+function closeVacancyModal() { document.getElementById("vacancyModal").style.display = "none"; }
+
+// ============================
+// SUBMIT OVERTIME
+// ============================
+function submitOvertime() {
+    const formData = new FormData();
+    formData.append("date", document.getElementById("ot_date").value);
+    formData.append("hours", document.getElementById("ot_hours").value);
+    formData.append("file", document.getElementById("ot_file").files[0]);
+
+    fetch("/hr/overtime", { method: "POST", body: formData })
+        .then(res => res.json())
+        .then(data => showPopup(data.message, data.success ? "success" : "error"));
+}
+
+// ============================
+// SUBMIT LEAVE
+// ============================
+function submitLeave() {
+    const formData = new FormData();
+    formData.append("start", document.getElementById("leave_start").value);
+    formData.append("end", document.getElementById("leave_end").value);
+    formData.append("type", document.getElementById("leave_type").value);
+    formData.append("file", document.getElementById("leave_file").files[0]);
+
+    fetch("/hr/leave", { method: "POST", body: formData })
+        .then(res => res.json())
+        .then(data => showPopup(data.message, data.success ? "success" : "error"));
+}
+
+// ============================
+// SUBMIT VACANCY
+// ============================
+function submitVacancy() {
+    fetch("/hr/vacancy", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+            position: document.getElementById("vac_position").value,
+            description: document.getElementById("vac_description").value
+        })
+    })
+    .then(res => res.json())
+    .then(data => showPopup(data.message, data.success ? "success" : "error"));
+}
+
+// ============================
+// OWNER APPROVAL ACTIONS
+// ============================
+function approveOvertime(id) {
+    fetch(`/hr/overtime/${id}/status`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({status: "Approved"})
+    })
+    .then(res => res.json())
+    .then(data => {
+        showPopup(data.message, data.success ? "success" : "error");
+        loadAdminHR();
+    });
+}
+
+function declineOvertime(id) {
+    fetch(`/hr/overtime/${id}/status`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({status: "Declined"})
+    })
+    .then(res => res.json())
+    .then(data => {
+        showPopup(data.message, data.success ? "success" : "error");
+        loadAdminHR();
+    });
+}
+
+function approveLeave(id) {
+    fetch(`/hr/leave/${id}/status`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({status: "Approved"})
+    })
+    .then(res => res.json())
+    .then(data => {
+        showPopup(data.message, data.success ? "success" : "error");
+        loadAdminHR();
+    });
+}
+
+function declineLeave(id) {
+    fetch(`/hr/leave/${id}/status`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({status: "Declined"})
+    })
+    .then(res => res.json())
+    .then(data => {
+        showPopup(data.message, data.success ? "success" : "error");
+        loadAdminHR();
+    });
+}
+
+// ============================
+// RUN PAYROLL
+// ============================
+function runPayroll() {
+    const month = document.getElementById("payroll_month").value;
+    const year = document.getElementById("payroll_year").value;
+
+    fetch("/hr/payroll/run", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({month, year})
+    })
+    .then(res => res.json())
+    .then(data => showPopup(data.message, data.success ? "success" : "error"));
+}
+
+// ============================
+// LOAD ADMIN HR DATA
+// ============================
+function loadAdminHR() {
+    fetch("/hr/admin-data")
+        .then(res => res.json())
+        .then(data => {
+            if (!data.success) return;
+
+            document.getElementById("kpi_overtime").innerText =
+                data.overtime ? data.overtime.filter(x => x.status === "Pending").length : 0;
+
+            document.getElementById("kpi_leave").innerText =
+                data.leave ? data.leave.filter(x => x.status === "Pending").length : 0;
+
+            document.getElementById("kpi_vacancies").innerText =
+                data.vacancies ? data.vacancies.filter(x => x.status === "Open").length : 0;
+
+            let otHTML = "";
+            (data.overtime || []).forEach(row => {
+                otHTML += `
+                    <tr>
+                        <td>${row.user_name}</td>
+                        <td>${row.ot_date}</td>
+                        <td>${row.hours}</td>
+                        <td>${row.file_path ? `<a href="/${row.file_path}" target="_blank">View</a>` : 'None'}</td>
+                        <td>${row.status}</td>
+                        <td>
+                            ${row.status === "Pending" ? `
+                                <button class="btn-success" onclick="approveOvertime(${row.id})">Approve</button>
+                                <button class="btn-danger" onclick="declineOvertime(${row.id})">Decline</button>
+                            ` : ''}
+                        </td>
+                    </tr>
+                `;
+            });
+            document.getElementById("adminOvertimeTable").innerHTML = otHTML;
+
+            let leaveHTML = "";
+            (data.leave || []).forEach(row => {
+                leaveHTML += `
+                    <tr>
+                        <td>${row.user_name}</td>
+                        <td>${row.start_date} → ${row.end_date}</td>
+                        <td>${row.leave_type}</td>
+                        <td>${row.file_path ? `<a href="/${row.file_path}" target="_blank">View</a>` : 'None'}</td>
+                        <td>${row.status}</td>
+                        <td>
+                            ${row.status === "Pending" ? `
+                                <button class="btn-success" onclick="approveLeave(${row.id})">Approve</button>
+                                <button class="btn-danger" onclick="declineLeave(${row.id})">Decline</button>
+                            ` : ''}
+                        </td>
+                    </tr>
+                `;
+            });
+            document.getElementById("adminLeaveTable").innerHTML = leaveHTML;
+
+            let vacHTML = "";
+            (data.vacancies || []).forEach(row => {
+                vacHTML += `
+                    <tr>
+                        <td>${row.position}</td>
+                        <td>${row.status}</td>
+                        <td>${row.applicants || 0}</td>
+                    </tr>
+                `;
+            });
+            document.getElementById("vacanciesTable").innerHTML = vacHTML;
+        });
+}
+
+// ============================
+// LOAD STAFF HR DATA
+// ============================
+function loadMyHR() {
+    fetch("/hr/my-data")
+        .then(res => res.json())
+        .then(data => {
+            if (!data.success) return;
+
+            let otHTML = "";
+            (data.overtime || []).forEach(row => {
+                otHTML += `
+                    <tr>
+                        <td>${row.ot_date}</td>
+                        <td>${row.hours}</td>
+                        <td>${row.status}</td>
+                    </tr>
+                `;
+            });
+            document.getElementById("myOvertimeTable").innerHTML = otHTML;
+
+            let leaveHTML = "";
+            (data.leave || []).forEach(row => {
+                leaveHTML += `
+                    <tr>
+                        <td>${row.start_date} → ${row.end_date}</td>
+                        <td>${row.leave_type}</td>
+                        <td>${row.status}</td>
+                    </tr>
+                `;
+            });
+            document.getElementById("myLeaveTable").innerHTML = leaveHTML;
+        });
+}
+
+// ============================
+// AUTO LOAD ON PAGE LOAD
+// ============================
+{% if session['user']['role'] == 'owner' %}
+loadAdminHR();
+{% else %}
+loadMyHR();
+{% endif %}
+
+</script>
+
+{% endblock %}

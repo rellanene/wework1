@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Payslip</title>
+    <style>
+        body { font-family: Segoe UI, sans-serif; margin: 40px; }
+        h1 { color: #d4af37; }
+        .box { border: 1px solid #ccc; padding: 15px; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 8px; border-bottom: 1px solid #ddd; }
+        th { background: #f5f5f5; }
+        .total { font-size: 20px; font-weight: bold; color: #d4af37; }
+    </style>
+</head>
+<body>
+
+<h1>Payslip</h1>
+
+<div class="box">
+    <h3>Employee Details</h3>
+    <p><strong>Name:</strong> {{ slip.employee_name }}</p>
+    <p><strong>Role:</strong> {{ slip.employee_role|capitalize }}</p>
+</div>
+
+<div class="box">
+    <h3>Payroll Period</h3>
+    <p><strong>Month:</strong> {{ slip.month }}</p>
+    <p><strong>Year:</strong> {{ slip.year }}</p>
+</div>
+
+<div class="box">
+    <h3>Earnings</h3>
+    <table>
+        <tr><th>Description</th><th>Amount</th></tr>
+        <tr><td>Basic Salary</td><td>R {{ "%.2f"|format(slip.basic_salary) }}</td></tr>
+        <tr><td>Overtime Pay</td><td>R {{ "%.2f"|format(slip.overtime_pay) }}</td></tr>
+    </table>
+</div>
+
+<div class="box">
+    <h3>Deductions</h3>
+    <table>
+        <tr><th>Description</th><th>Amount</th></tr>
+        <tr><td>Total Deductions</td><td>R {{ "%.2f"|format(slip.deductions) }}</td></tr>
+    </table>
+</div>
+
+<div class="box">
+    <h3>Net Pay</h3>
+    <p class="total">R {{ "%.2f"|format(slip.net_pay) }}</p>
+</div>
+
+</body>
+</html>
