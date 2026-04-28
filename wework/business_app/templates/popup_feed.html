@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Feed Post</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f9fafb;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .close-btn {
+            background: #1f2937;
+            color: #fff;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .close-btn:hover {
+            background: #111827;
+        }
+
+        .post-box {
+            background: #fff;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+            box-shadow: 0 0 6px rgba(0,0,0,0.08);
+        }
+
+        .comment {
+            background: #f3f4f6;
+            padding: 8px;
+            border-radius: 6px;
+            margin-top: 8px;
+        }
+
+        .meta {
+            font-size: 11px;
+            color: #6b7280;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="header">
+    <h2>Feed Post</h2>
+    
+</div>
+
+<div class="post-box">
+    <h3>{{ post.user }}</h3>
+    <p>{{ post.text }}</p>
+    <p class="meta">{{ post.created_at }}</p>
+
+    <h4>Comments</h4>
+    {% for c in comments %}
+        <div class="comment">
+            <strong>{{ c.user }}</strong><br>
+            {{ c.comment }}
+            <div class="meta">{{ c.created_at }}</div>
+        </div>
+    {% endfor %}
+</div>
+
+</body>
+</html>

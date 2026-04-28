@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chat View</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f9fafb;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .close-btn {
+            background: #1f2937;
+            color: #fff;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .close-btn:hover {
+            background: #111827;
+        }
+
+        .chat-box {
+            background: #fff;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+            box-shadow: 0 0 6px rgba(0,0,0,0.08);
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .msg {
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            max-width: 70%;
+        }
+
+        .me {
+            background: #d4af37;
+            color: #000;
+            margin-left: auto;
+        }
+
+        .them {
+            background: #e5e7eb;
+            color: #000;
+        }
+
+        .meta {
+            font-size: 10px;
+            color: #6b7280;
+            margin-top: 2px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="header">
+    <h2>Chat with {{ other_user.name }}</h2>
+    
+</div>
+
+<div class="chat-box">
+    {% for m in messages %}
+        <div class="msg {% if m.sender_id == session['user']['id'] %}me{% else %}them{% endif %}">
+            {{ m.message }}
+            <div class="meta">{{ m.sent_at }}</div>
+        </div>
+    {% endfor %}
+</div>
+
+</body>
+</html>

@@ -1,0 +1,28 @@
+<div class="email-card">
+
+    <h2 style="margin-bottom:10px;">Reply to {{ email.from_name }}</h2>
+
+    <form id="replyForm">
+
+        <input type="hidden" name="email_id" value="{{ email.id }}">
+
+        <div style="margin-bottom:10px;">
+            <label><strong>To:</strong></label>
+            <input class="form-control" name="to" value="{{ email.from_email }}" readonly>
+        </div>
+
+        <div style="margin-bottom:10px;">
+            <label><strong>Subject:</strong></label>
+            <input class="form-control" name="subject" value="Re: {{ email.subject }}">
+        </div>
+
+        <div style="margin-bottom:10px;">
+            <label><strong>Message:</strong></label>
+            <textarea class="form-control" name="body" rows="8"></textarea>
+        </div>
+
+        <button class="btn-primary" type="button" onclick="sendReply()">Send Reply</button>
+
+    </form>
+
+</div>

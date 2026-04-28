@@ -1,0 +1,56 @@
+<div class="email-card">
+
+    <h2 style="margin-bottom:10px;">Email: {{ email.subject }}</h2>
+
+    <!-- Tabs -->
+    <div style="display:flex; gap:10px; margin-bottom:15px;">
+        <button class="btn-secondary btn-small" onclick="showEmailTab('detailsTab')">Details</button>
+        <button class="btn-secondary btn-small" onclick="showEmailTab('trailTab')">Trail</button>
+        <button class="btn-secondary btn-small" onclick="showEmailTab('footprintTab')">Footprint</button>
+    </div>
+
+    <!-- DETAILS TAB -->
+    <div id="detailsTab" class="email-tab">
+        <p><strong>From:</strong> {{ email.from_name }} &lt;{{ email.from_email }}&gt;</p>
+        <p><strong>To:</strong> {{ email.to_summary }}</p>
+        <p><strong>Sent:</strong> {{ email.sent_at }}</p>
+
+        <hr>
+
+        <div style="white-space:pre-wrap;">{{ email.body_text }}</div>
+
+        <hr>
+
+        <button class="btn-primary" onclick="replyToEmail({{ email.id }})">Reply</button>
+        <button class="btn-primary" onclick="forwardEmail({{ email.id }})">Forward</button>
+        <button class="btn-secondary" onclick="archiveEmail({{ email.id }})">Archive</button>
+    </div>
+
+    <!-- TRAIL TAB -->
+    <div id="trailTab" class="email-tab" style="display:none;">
+        {% for t in trail %}
+            <div style="padding:6px; border-bottom:1px solid #eee;">
+                <strong>{{ t.action }}</strong><br>
+                {{ t.timestamp }}
+            </div>
+        {% endfor %}
+    </div>
+
+    <!-- FOOTPRINT TAB -->
+    <div id="footprintTab" class="email-tab" style="display:none;">
+        {% for f in footprint %}
+            <div style="padding:6px; border-bottom:1px solid #eee;">
+                <strong>{{ f.user }}</strong> — {{ f.action }}<br>
+                {{ f.timestamp }}
+            </div>
+        {% endfor %}
+    </div>
+
+</div>
+
+<script>
+function showEmailTab(tab) {
+    document.querySelectorAll(".email-tab").forEach(t => t.style.display = "none");
+    document.getElementById(tab).style.display = "block";
+}
+</script>

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Email View</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f9fafb;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .close-btn {
+            background: #1f2937;
+            color: #fff;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .close-btn:hover {
+            background: #111827;
+        }
+
+        .section {
+            background: #fff;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+            box-shadow: 0 0 6px rgba(0,0,0,0.08);
+        }
+
+        .footprint {
+            font-size: 12px;
+            color: #6b7280;
+            border-top: 1px dashed #d1d5db;
+            margin-top: 10px;
+            padding-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="header">
+    <h2>Email</h2>
+    
+</div>
+
+<div class="section">
+    <h3>{{ email.subject }}</h3>
+
+    <p><strong>From:</strong> {{ email.from_id }}</p>
+    <p><strong>To:</strong> {{ email.to_ids }}</p>
+    <p><strong>Cc:</strong> {{ email.cc_ids }}</p>
+    <p><strong>Bcc:</strong> {{ email.bcc_ids }}</p>
+    <p><strong>Sent:</strong> {{ email.sent_at }}</p>
+
+    <hr>
+
+    <p>{{ email.body_text | safe }}</p>
+
+    {% if attachments %}
+    <h4>Attachments</h4>
+    <ul>
+        {% for a in attachments %}
+        <li><a href="/uploads/emails/{{ a.filename }}" target="_blank">{{ a.filename }}</a></li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <div class="footprint">
+        <h4>Footprint</h4>
+        {% for f in footprint %}
+            <p>{{ f.timestamp }} — {{ f.user }}: {{ f.action }}</p>
+        {% endfor %}
+    </div>
+</div>
+
+</body>
+</html>

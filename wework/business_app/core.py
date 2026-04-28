@@ -240,41 +240,39 @@ def create_app():
                         can_view_products,
                         can_view_customers,
                         can_view_sales,
+                        can_view_returns,
+                        can_view_human,
+                        can_view_tasks,
+                        can_view_comms,
                         can_view_pos,
                         can_view_finances,
                         can_view_reports,
-                        can_view_visuals,
+                        can_view_visual_dashboard,
                         can_view_stores,
                         can_view_stock_in,
-                        can_view_stock_transfer,
+                        can_view_transfer,
                         can_view_movements,
                         can_view_gallery,
                         can_view_settings,
-                        can_view_profile
-                    ) VALUES (%s, 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1)
+                        can_view_profile,
+                        can_view_leave,
+                        can_view_overtime,
+                        can_view_vacancies,
+                        can_view_approvals,
+                        can_view_payroll,
+                        can_view_payslips
+                    ) VALUES (
+                        %s,
+                        1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+                        1,1,1,1,1,1
+                    )
                 """, (user_id,))
+
     
             # -----------------------------
             # STAFF REGISTRATION
             # -----------------------------
-            elif user_type == "staff":
-                business_id = request.form["business_id"]
-    
-                cursor.execute("""
-                    INSERT INTO users (business_id, name, email, password, role)
-                    VALUES (%s, %s, %s, %s, 'staff')
-                """, (business_id, name, email, password))
-                user_id = cursor.lastrowid
-    
-                # Save security questions
-                cursor.execute("""
-                    INSERT INTO user_security_questions (
-                        user_id, question1, answer1, question2, answer2,
-                        question3, answer3, question4, answer4, question5, answer5
-                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                """, (user_id, q1, a1, q2, a2, q3, a3, q4, a4, q5, a5))
-    
-                # Staff gets ZERO permissions by default
+        # Owner gets full permissions
                 cursor.execute("""
                     INSERT INTO user_permissions (
                         user_id,
@@ -282,19 +280,34 @@ def create_app():
                         can_view_products,
                         can_view_customers,
                         can_view_sales,
+                        can_view_returns,
+                        can_view_human,
+                        can_view_tasks,
+                        can_view_comms,
                         can_view_pos,
                         can_view_finances,
                         can_view_reports,
-                        can_view_visuals,
+                        can_view_visual_dashboard,
                         can_view_stores,
                         can_view_stock_in,
-                        can_view_stock_transfer,
+                        can_view_transfer,
                         can_view_movements,
                         can_view_gallery,
                         can_view_settings,
-                        can_view_profile
-                    ) VALUES (%s, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+                        can_view_profile,
+                        can_view_leave,
+                        can_view_overtime,
+                        can_view_vacancies,
+                        can_view_approvals,
+                        can_view_payroll,
+                        can_view_payslips
+                    ) VALUES (
+                        %s,
+                        1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+                        1,1,1,1,1,1
+                    )
                 """, (user_id,))
+
     
             db.commit()
             flash("Registration successful. Please log in.", "success")
@@ -308,25 +321,33 @@ def create_app():
         if request.method == "POST":
             email = request.form["email"]
             password = hash_password(request.form["password"])
-
+    
             db = get_db()
             cursor = db.cursor(dictionary=True)
             cursor.execute("SELECT * FROM users WHERE email=%s AND password=%s", (email, password))
             user = cursor.fetchone()
-
+    
             if user:
+                # Load permissions
+                cursor.execute("SELECT * FROM user_permissions WHERE user_id=%s", (user["id"],))
+                perms = cursor.fetchone() or {}
+    
+                # Store user + permissions in session
                 session["user"] = {
                     "id": user["id"],
                     "name": user["name"],
                     "email": user["email"],
                     "role": user["role"],
-                    "business_id": user["business_id"]
+                    "business_id": user["business_id"],
+                    "permissions": perms
                 }
+    
                 return redirect(url_for("dashboard"))
-
+    
             flash("Invalid email or password", "danger")
-
+    
         return render_template("login.html")
+
 
     @app.route("/logout")
     def logout():
@@ -397,6 +418,8 @@ def create_app():
     
         flash("Password reset successful. Please log in.", "success")
         return redirect(url_for("login"))
+    
+    
 
 
 
@@ -989,31 +1012,47 @@ def create_app():
     @app.route("/human")
     @login_required
     def human():
-        # Owner: full HR access
-        if session['user']['role'] == 'owner' or getattr(permissions, "can_view_hr", False):
+        user = session["user"]
+        perms = user.get("permissions", {})
+    
+        if user["role"] == "owner" or perms.get("can_view_human", 0):
             return render_template("human.html")
+    
         return redirect(url_for("dashboard"))
+
+
+
+
     
     
     # ------------------ HR Footprint Logger ------------------
+    
     def log_hr_action(user_id, action, details):
         conn = get_db()
         cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO hr_footprint (user_id, action, details)
-            VALUES (%s, %s, %s)
-        """, (user_id, action, details))
-        conn.commit()
     
+        business_id = session["user"]["business_id"]
+    
+        cursor.execute("""
+            INSERT INTO hr_footprint (business_id, user_id, action, details)
+            VALUES (%s, %s, %s, %s)
+        """, (business_id, user_id, action, details))
+    
+        conn.commit()
+
+
     
     # ------------------ Submit Overtime ------------------
     @app.route("/hr/overtime", methods=["POST"])
     @login_required
     def hr_overtime():
+        user = session["user"]
+    
         conn = get_db()
         cursor = conn.cursor(dictionary=True)
     
-        user_id = session["user"]["id"]
+        user_id = user["id"]
+        business_id = user["business_id"]   # ⭐ important
         ot_date = request.form.get("date")
         hours = request.form.get("hours")
         file = request.files.get("file")
@@ -1029,23 +1068,28 @@ def create_app():
             file.save(file_path)
     
         cursor.execute("""
-            INSERT INTO overtime (user_id, ot_date, hours, file_path)
-            VALUES (%s, %s, %s, %s)
-        """, (user_id, ot_date, hours, file_path))
+            INSERT INTO overtime (user_id, business_id, ot_date, hours, file_path)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (user_id, business_id, ot_date, hours, file_path))
         conn.commit()
     
         log_hr_action(user_id, "Overtime Submitted", f"Date: {ot_date}, Hours: {hours}")
         return jsonify({"success": True, "message": "Overtime submitted successfully!"})
+
+
     
     
     # ------------------ Submit Leave ------------------
     @app.route("/hr/leave", methods=["POST"])
     @login_required
     def hr_leave():
+        user = session["user"]
+    
         conn = get_db()
         cursor = conn.cursor(dictionary=True)
     
-        user_id = session["user"]["id"]
+        user_id = user["id"]
+        business_id = user["business_id"]   # ⭐ important
         start = request.form.get("start")
         end = request.form.get("end")
         leave_type = request.form.get("type")
@@ -1062,20 +1106,25 @@ def create_app():
             file.save(file_path)
     
         cursor.execute("""
-            INSERT INTO leave_requests (user_id, start_date, end_date, leave_type, file_path)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (user_id, start, end, leave_type, file_path))
+            INSERT INTO leave_requests (user_id, business_id, start_date, end_date, leave_type, file_path)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (user_id, business_id, start, end, leave_type, file_path))
         conn.commit()
     
         log_hr_action(user_id, "Leave Requested", f"{leave_type} from {start} to {end}")
         return jsonify({"success": True, "message": "Leave request submitted!"})
+
+
     
     
     # ------------------ Add Vacancy (Owner Only) ------------------
     @app.route("/hr/vacancy", methods=["POST"])
     @login_required
     def hr_vacancy():
-        if session['user']['role'] != 'owner' and not getattr(permissions, "can_manage_vacancies", False):
+        user = session["user"]
+        perms = user.get("permissions", {})
+    
+        if not (user["role"] == "owner" or perms.get("can_view_vacancies", 0)):
             return jsonify({"success": False, "message": "Access denied."})
     
         conn = get_db()
@@ -1094,19 +1143,33 @@ def create_app():
         """, (position, description))
         conn.commit()
     
-        log_hr_action(session["user"]["id"], "Vacancy Added", f"Position: {position}")
+        log_hr_action(user["id"], "Vacancy Added", f"Position: {position}")
         return jsonify({"success": True, "message": "Vacancy added!"})
+
     
     
     # ------------------ Approve/Decline Overtime ------------------
     @app.route("/hr/overtime/<int:ot_id>/status", methods=["POST"])
     @login_required
     def hr_overtime_status(ot_id):
-        if session['user']['role'] != 'owner' and not getattr(permissions, "can_approve_hr", False):
+        user = session["user"]
+    
+        # Only owner can approve/decline
+        if user["role"] != "owner":
             return jsonify({"success": False, "message": "Access denied."})
     
         conn = get_db()
         cursor = conn.cursor(dictionary=True)
+    
+        # Load overtime entry and ensure it belongs to the same business
+        cursor.execute("""
+            SELECT * FROM overtime
+            WHERE id=%s AND business_id=%s
+        """, (ot_id, user["business_id"]))
+        overtime = cursor.fetchone()
+    
+        if not overtime:
+            return jsonify({"success": False, "message": "Overtime entry not found."})
     
         data = request.get_json() or {}
         status = data.get("status")
@@ -1114,22 +1177,106 @@ def create_app():
         if status not in ("Approved", "Declined"):
             return jsonify({"success": False, "message": "Invalid status."})
     
-        cursor.execute("UPDATE overtime SET status=%s WHERE id=%s", (status, ot_id))
+        cursor.execute("""
+            UPDATE overtime SET status=%s
+            WHERE id=%s
+        """, (status, ot_id))
         conn.commit()
     
-        log_hr_action(session["user"]["id"], "Overtime Status Changed", f"ID: {ot_id}, Status: {status}")
+        log_hr_action(user["id"], "Overtime Status Changed", f"ID: {ot_id}, Status: {status}")
+    
         return jsonify({"success": True, "message": f"Overtime {status.lower()}."})
+    
+    
+    @app.route("/hr/data")
+    @login_required
+    def hr_data():
+        user = session["user"]
+        business_id = user["business_id"]
+    
+        conn = get_db()
+        cursor = conn.cursor(dictionary=True)
+    
+        # OWNER: load all overtime + leave for the business
+        if user["role"] == "owner":
+            cursor.execute("""
+                SELECT o.*, u.name AS staff_name
+                FROM overtime o
+                JOIN users u ON u.id = o.user_id
+                WHERE o.business_id=%s
+                ORDER BY o.ot_date DESC
+            """, (business_id,))
+            overtime = cursor.fetchall()
+    
+            cursor.execute("""
+                SELECT l.*, u.name AS staff_name
+                FROM leave_requests l
+                JOIN users u ON u.id = l.user_id
+                WHERE l.business_id=%s
+                ORDER BY l.start_date DESC
+            """, (business_id,))
+            leave = cursor.fetchall()
+    
+        # STAFF: load only their own
+        else:
+            cursor.execute("""
+                SELECT o.*, u.name AS staff_name
+                FROM overtime o
+                JOIN users u ON u.id = o.user_id
+                WHERE o.user_id=%s
+                ORDER BY o.ot_date DESC
+            """, (user["id"],))
+            overtime = cursor.fetchall()
+    
+            cursor.execute("""
+                SELECT l.*, u.name AS staff_name
+                FROM leave_requests l
+                JOIN users u ON u.id = l.user_id
+                WHERE l.user_id=%s
+                ORDER BY l.start_date DESC
+            """, (user["id"],))
+            leave = cursor.fetchall()
+    
+        # Summary counts for cards
+        summary = {
+            "pending": sum(1 for r in overtime + leave if r.get("status") == "Pending"),
+            "approved": sum(1 for r in overtime + leave if r.get("status") == "Approved"),
+            "declined": sum(1 for r in overtime + leave if r.get("status") == "Declined"),
+        }
+    
+        return jsonify({
+            "success": True,
+            "overtime": overtime,
+            "leave": leave,
+            "summary": summary
+        })
+
+
+
     
     
     # ------------------ Approve/Decline Leave ------------------
     @app.route("/hr/leave/<int:leave_id>/status", methods=["POST"])
     @login_required
     def hr_leave_status(leave_id):
-        if session['user']['role'] != 'owner' and not getattr(permissions, "can_approve_hr", False):
+        user = session["user"]
+    
+        # Only owner can approve/decline
+        if user["role"] != "owner":
             return jsonify({"success": False, "message": "Access denied."})
     
         conn = get_db()
         cursor = conn.cursor(dictionary=True)
+    
+        # Load leave entry and ensure it belongs to the same business
+        cursor.execute("""
+            SELECT * FROM leave_requests
+            WHERE id=%s AND business_id=%s
+        """, (leave_id, user["business_id"]))
+        leave = cursor.fetchone()
+    
+        if not leave:
+            return jsonify({"success": False, "message": "Leave request not found."})
     
         data = request.get_json() or {}
         status = data.get("status")
@@ -1137,11 +1284,17 @@ def create_app():
         if status not in ("Approved", "Declined"):
             return jsonify({"success": False, "message": "Invalid status."})
     
-        cursor.execute("UPDATE leave_requests SET status=%s WHERE id=%s", (status, leave_id))
+        cursor.execute("""
+            UPDATE leave_requests SET status=%s
+            WHERE id=%s
+        """, (status, leave_id))
         conn.commit()
     
-        log_hr_action(session["user"]["id"], "Leave Status Changed", f"ID: {leave_id}, Status: {status}")
+        log_hr_action(user["id"], "Leave Status Changed", f"ID: {leave_id}, Status: {status}")
+    
         return jsonify({"success": True, "message": f"Leave {status.lower()}."})
+
+
     
     
     # ------------------ Staff HR Data ------------------
@@ -1163,13 +1316,17 @@ def create_app():
             "overtime": overtime_rows,
             "leave": leave_rows
         })
+
     
     
     # ------------------ Admin HR Data ------------------
     @app.route("/hr/admin-data")
     @login_required
     def hr_admin_data():
-        if session['user']['role'] != 'owner' and not getattr(permissions, "can_manage_hr", False):
+        user = session["user"]
+        perms = user.get("permissions", {})
+    
+        if not (user["role"] == "owner" or perms.get("can_view_human", 0)):
             return jsonify({"success": False, "message": "Access denied."})
     
         conn = get_db()
@@ -1196,15 +1353,21 @@ def create_app():
             "vacancies": vacancies,
             "footprint": footprint
         })
+
         
     #-------------Payslip Route------
     @app.route("/hr/payslip/<int:payroll_id>")
     @login_required
     def hr_payslip(payroll_id):
+        user = session["user"]
+        perms = user.get("permissions", {})
+    
+        if not (user["role"] == "owner" or perms.get("can_view_payslips", 0)):
+            return "Access denied", 403
+    
         conn = get_db()
         cursor = conn.cursor(dictionary=True)
     
-        # Load payroll record
         cursor.execute("""
             SELECT p.*, u.name AS employee_name, u.role AS employee_role
             FROM payroll p
@@ -1216,30 +1379,29 @@ def create_app():
         if not payslip:
             return "Payslip not found", 404
     
-        # Access control:
-        # Owner can view all payslips
-        # Staff can only view their own
-        if session["user"]["role"] != "owner":
-            if payslip["user_id"] != session["user"]["id"]:
-                return "Access denied", 403
+        if user["role"] != "owner" and payslip["user_id"] != user["id"]:
+            return "Access denied", 403
     
-        # Render HTML template
         html = render_template("payslip.html", slip=payslip)
-    
-        # Convert to PDF
         pdf = generate_pdf(html)
     
-        # Return PDF
         return pdf
+
     
     #----------Load Payroll History
     @app.route("/hr/payroll/history")
     @login_required
     def hr_payroll_history():
+        user = session["user"]
+        perms = user.get("permissions", {})
+    
+        if not (user["role"] == "owner" or perms.get("can_view_payroll", 0)):
+            return jsonify({"success": False, "message": "Access denied."})
+    
         conn = get_db()
         cursor = conn.cursor(dictionary=True)
     
-        if session["user"]["role"] == "owner":
+        if user["role"] == "owner":
             cursor.execute("""
                 SELECT p.*, u.name AS employee_name
                 FROM payroll p
@@ -1253,10 +1415,11 @@ def create_app():
                 JOIN users u ON p.user_id = u.id
                 WHERE p.user_id=%s
                 ORDER BY p.year DESC, p.month DESC
-            """, (session["user"]["id"],))
+            """, (user["id"],))
     
         rows = cursor.fetchall()
         return jsonify({"success": True, "rows": rows})
+
 
     
 
@@ -1825,34 +1988,37 @@ def create_app():
         db = get_db()
         cursor = db.cursor()
     
-        data = request.get_json() or {}
+        data = request.form   # <-- FIXED (no JSON expected)
     
         fields = [
-            # System permissions
             "can_view_dashboard",
             "can_view_products",
             "can_view_customers",
             "can_view_sales",
+            "can_view_returns",
+            "can_view_human",
+            "can_view_tasks",
+            "can_view_comms",
+            "can_view_pos",
             "can_view_finances",
-            "can_view_visuals",
+            "can_view_reports",
+            "can_view_visual_dashboard",
             "can_view_stores",
             "can_view_stock_in",
-            "can_view_stock_transfer",
+            "can_view_transfer",
             "can_view_movements",
             "can_view_gallery",
             "can_view_settings",
-    
-            # HR permissions
-            "can_view_hr",
-            "can_submit_overtime",
-            "can_submit_leave",
-            "can_manage_vacancies",
-            "can_approve_hr",
-            "can_run_payroll",
+            "can_view_profile",
+            "can_view_leave",
+            "can_view_overtime",
+            "can_view_vacancies",
+            "can_view_approvals",
+            "can_view_payroll",
             "can_view_payslips"
         ]
     
-        values = [int(data.get(f, False)) for f in fields]
+        values = [int(data.get(f, 0)) for f in fields]
     
         cursor.execute("SELECT id FROM user_permissions WHERE user_id=%s", (user_id,))
         exists = cursor.fetchone()
@@ -1874,7 +2040,10 @@ def create_app():
     
         db.commit()
     
-        return jsonify({"success": True, "message": "Permissions updated successfully!"})
+        return redirect("/settings?perm_saved=1")
+
+
+
 
     
    
@@ -2019,6 +2188,35 @@ def create_app():
     # ============================================================
 # TASKS MODULE
 # ============================================================
+    import random
+    
+    def generate_task_number():
+        return str(random.randint(100000, 999999))
+
+    from flask import abort, session
+    
+    def require_permission(flag):
+        def decorator(fn):
+            @wraps(fn)
+            def wrapper(*args, **kwargs):
+                user = session.get("user")
+                if not user:
+                    abort(403)
+    
+                # ⭐ OWNER OVERRIDE
+                if user.get("role") == "owner":
+                    return fn(*args, **kwargs)
+    
+                perms = user.get("permissions", {})
+    
+                if not perms.get(flag, 0):
+                    abort(403)
+    
+                return fn(*args, **kwargs)
+            return wrapper
+        return decorator
+
+
     @app.route("/tasks")
     @login_required
     def tasks_page():
@@ -2027,7 +2225,6 @@ def create_app():
     
         business_id = session["user"]["business_id"]
     
-        # Load all users for assignment dropdown
         cursor.execute("""
             SELECT id, name 
             FROM users 
@@ -2039,14 +2236,6 @@ def create_app():
         return render_template("tasks.html", users=users)
 
 
-    import random
-    
-    from werkzeug.utils import secure_filename
-    
-    
-    # Generate 6-digit task number
-    def generate_task_number():
-        return str(random.randint(100000, 999999))
     
     
     # ============================================================
@@ -2054,7 +2243,9 @@ def create_app():
     # ============================================================
     @app.route("/tasks/my")
     @login_required
+    @require_permission("can_view_tasks")
     def tasks_my():
+
         db = get_db()
         cursor = db.cursor(dictionary=True)
     
@@ -2082,6 +2273,8 @@ def create_app():
     # ============================================================
     @app.route("/tasks/search")
     @login_required
+    
+
     def tasks_search():
         q = request.args.get("q", "")
         user_id = session["user"]["id"]
@@ -2134,6 +2327,7 @@ def create_app():
         db.commit()
     
         return jsonify({"success": True, "message": "Task created successfully!"})
+
     
     
     # ============================================================
@@ -2141,6 +2335,8 @@ def create_app():
     # ============================================================
     @app.route("/tasks/<int:task_id>")
     @login_required
+    
+
     def tasks_details(task_id):
         db = get_db()
         cursor = db.cursor(dictionary=True)
@@ -2199,6 +2395,8 @@ def create_app():
     # ============================================================
     @app.route("/tasks/<int:task_id>/transfer", methods=["POST"])
     @login_required
+    
+
     def tasks_transfer(task_id):
         data = request.get_json() or {}
         new_user = data.get("new_user")
@@ -2233,6 +2431,7 @@ def create_app():
     # ============================================================
     @app.route("/tasks/<int:task_id>/upload", methods=["POST"])
     @login_required
+
     def tasks_upload(task_id):
         file = request.files.get("file")
     
@@ -2262,6 +2461,7 @@ def create_app():
     # ============================================================
     @app.route("/tasks/<int:task_id>/comment", methods=["POST"])
     @login_required
+    
     def tasks_comment(task_id):
         data = request.get_json() or {}
         comment = data.get("comment")
@@ -2297,6 +2497,8 @@ def create_app():
     #---------------Update Task Status----
     @app.route("/tasks/<int:task_id>/status", methods=["POST"])
     @login_required
+   
+
     def tasks_update_status(task_id):
         user_id = session["user"]["id"]   # ⭐ FIXED LINE
     
@@ -2335,6 +2537,8 @@ def create_app():
     #------------------Load Archived Tasks
     @app.route("/tasks/archived")
     @login_required
+    @require_permission("can_view_tasks")
+
     def tasks_archived():
         db = get_db()
         cursor = db.cursor(dictionary=True)
@@ -2353,8 +2557,618 @@ def create_app():
     
     @app.route("/tasks/archived/page")
     @login_required
+    @require_permission("can_view_tasks")
+
     def tasks_archived_page():
         return render_template("tasks_archived.html")
+    
+    
+    #--------------EMAIL ENGINE------------
+    ###############################################
+    # COMMS MODULE — EMAIL + CHAT + FEED
+    ###############################################
+    
+    from flask import request, jsonify, session
+
+    from datetime import datetime
+    
+    UPLOAD_EMAILS = "static/uploads/emails"
+    os.makedirs(UPLOAD_EMAILS, exist_ok=True)
+    
+    ###############################################
+    # EMAIL ENGINE
+    ###############################################
+    
+    @app.route("/comms")
+    @login_required
+    def comms_page():
+        return render_template("comms.html", current="comms_page")
+
+    
+    @app.route("/comms/email/inbox")
+    @login_required
+    def comms_inbox():
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("""
+            SELECT 
+                e.id,
+                e.subject,
+                e.body_text,
+                e.sent_at,
+                e.from_id,
+                u.name AS from_name,
+                CONCAT(u.name, ' <', u.email, '>') AS from_email,
+                (SELECT GROUP_CONCAT(name SEPARATOR ', ')
+                 FROM users WHERE FIND_IN_SET(id, e.to_ids)) AS to_summary
+            FROM emails e
+            JOIN users u ON u.id = e.from_id
+            WHERE e.business_id = %s
+              AND FIND_IN_SET(%s, e.to_ids)
+              AND e.archived = 0
+            ORDER BY e.sent_at DESC
+        """, (session["user"]["business_id"], session["user"]["id"]))
+    
+        emails = cursor.fetchall()
+    
+        # RETURN RAW LIST (NOT WRAPPED)
+        return jsonify(emails)
+
+    
+    
+    @app.route("/comms/email/sent")
+    @login_required
+    def comms_sent():
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("""
+            SELECT 
+                e.id,
+                e.subject,
+                e.body_text,
+                e.sent_at,
+                e.to_ids,
+                (SELECT GROUP_CONCAT(name SEPARATOR ', ')
+                 FROM users WHERE FIND_IN_SET(id, e.to_ids)) AS to_summary
+            FROM emails e
+            WHERE e.business_id = %s
+              AND e.from_id = %s
+            ORDER BY e.sent_at DESC
+        """, (session["user"]["business_id"], session["user"]["id"]))
+    
+        emails = cursor.fetchall()
+    
+        # Return RAW LIST (not wrapped)
+        return jsonify(emails)
+
+    
+    
+    @app.route("/comms/email/archive")
+    @login_required
+    def comms_email_archive():
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("""
+            SELECT 
+                e.id,
+                e.subject,
+                e.body_text,
+                e.sent_at,
+                e.from_id,
+                u.name AS from_name,
+                CONCAT(u.name, ' <', u.email, '>') AS from_email,
+                (SELECT GROUP_CONCAT(name SEPARATOR ', ')
+                 FROM users WHERE FIND_IN_SET(id, e.to_ids)) AS to_summary
+            FROM emails e
+            JOIN users u ON u.id = e.from_id
+            WHERE e.business_id = %s
+              AND FIND_IN_SET(%s, e.to_ids)
+              AND e.archived = 1
+            ORDER BY e.sent_at DESC
+        """, (session["user"]["business_id"], session["user"]["id"]))
+    
+        emails = cursor.fetchall()
+    
+        # Return RAW LIST (not wrapped)
+        return jsonify(emails)
+
+    
+    
+    @app.route("/comms/email/search")
+    @login_required
+    def comms_email_search():
+        q = request.args.get("q", "")
+        box = request.args.get("box", "inbox")
+    
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        base_query = """
+            SELECT e.*, u.name AS from_name
+            FROM emails e
+            JOIN users u ON u.id = e.from_id
+            WHERE (e.subject LIKE %s OR e.body_text LIKE %s)
+        """
+    
+        params = [f"%{q}%", f"%{q}%"]
+    
+        if box == "inbox":
+            base_query += " AND FIND_IN_SET(%s, e.to_ids) AND e.archived=0"
+            params.append(session["user"]["id"])
+        elif box == "sent":
+            base_query += " AND e.from_id=%s"
+            params.append(session["user"]["id"])
+        else:
+            base_query += " AND FIND_IN_SET(%s, e.to_ids) AND e.archived=1"
+            params.append(session["user"]["id"])
+    
+        cursor.execute(base_query, params)
+        emails = cursor.fetchall()
+    
+        return jsonify({"success": True, "emails": emails})
+    
+    @app.route("/comms/email/compose")
+    @login_required
+    def comms_email_compose():
+        return render_template("compose_email.html")
+    
+    @app.route("/comms/email/users")
+    @login_required
+    def comms_email_users():
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("""
+            SELECT id, name, email
+            FROM users
+            WHERE business_id = %s
+            ORDER BY name ASC
+        """, (session["user"]["business_id"],))
+    
+        return jsonify(cursor.fetchall())
+
+    
+
+    
+    
+    
+    @app.route("/comms/email/<int:email_id>")
+    @login_required
+    def comms_email_view(email_id):
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("""
+            SELECT e.*, 
+                   u.name AS from_name,
+                   u.email AS from_email,
+                   (SELECT GROUP_CONCAT(name SEPARATOR ', ')
+                    FROM users WHERE FIND_IN_SET(id, e.to_ids)) AS to_summary
+            FROM emails e
+            JOIN users u ON u.id = e.from_id
+            WHERE e.id = %s AND e.business_id = %s
+        """, (email_id, session["user"]["business_id"]))
+    
+        email = cursor.fetchone()
+    
+        cursor.execute("""
+            SELECT action, timestamp
+            FROM email_trail
+            WHERE email_id = %s
+            ORDER BY timestamp ASC
+        """, (email_id,))
+        trail = cursor.fetchall()
+    
+        cursor.execute("""
+            SELECT user, action, timestamp
+            FROM email_footprint
+            WHERE email_id = %s
+            ORDER BY timestamp ASC
+        """, (email_id,))
+        footprint = cursor.fetchall()
+    
+        return render_template("card_email.html",
+                               email=email,
+                               trail=trail,
+                               footprint=footprint)
+
+
+
+    @app.route("/comms/chat/<int:user_id>")
+    @login_required
+    def comms_chat_popup(user_id):
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("""
+            SELECT *
+            FROM chat_messages
+            WHERE business_id=%s
+            AND (
+                (sender_id=%s AND receiver_id=%s)
+                OR
+                (sender_id=%s AND receiver_id=%s)
+            )
+            ORDER BY sent_at ASC
+        """, (
+            session["user"]["business_id"],
+            session["user"]["id"], user_id,
+            user_id, session["user"]["id"]
+        ))
+        messages = cursor.fetchall()
+    
+        cursor.execute("SELECT id, name, email FROM users WHERE id=%s", (user_id,))
+        other_user = cursor.fetchone()
+    
+        return render_template("popup_chat.html",
+                               messages=messages,
+                               other_user=other_user)
+        
+    @app.route("/comms/feed/<int:post_id>")
+    @login_required
+    def comms_feed_popup(post_id):
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("""
+            SELECT *
+            FROM feed_posts
+            WHERE id=%s AND business_id=%s
+        """, (post_id, session["user"]["business_id"]))
+        post = cursor.fetchone()
+    
+        cursor.execute("""
+            SELECT *
+            FROM feed_comments
+            WHERE post_id=%s
+            ORDER BY created_at ASC
+        """, (post_id,))
+        comments = cursor.fetchall()
+    
+        return render_template("popup_feed.html",
+                               post=post,
+                               comments=comments)
+
+
+    
+    @app.route("/comms/email/send", methods=["POST"])
+    @login_required
+    def comms_email_send():
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        subject = request.form.get("subject")
+        body = request.form.get("body")
+    
+        # Chips come in as JSON arrays
+        to_list = json.loads(request.form.get("to", "[]"))
+        cc_list = json.loads(request.form.get("cc", "[]"))
+        bcc_list = json.loads(request.form.get("bcc", "[]"))
+    
+        # Convert to CSV for DB
+        to_ids = ",".join(to_list)
+        cc_ids = ",".join(cc_list)
+        bcc_ids = ",".join(bcc_list)
+    
+        cursor.execute("""
+            INSERT INTO emails (business_id, from_id, to_ids, cc_ids, bcc_ids, subject, body_text, sent_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+        """, (
+            session["user"]["business_id"],   # ⭐ FIXED
+            session["user"]["id"],
+            to_ids,
+            cc_ids,
+            bcc_ids,
+            subject,
+            body
+        ))
+    
+        email_id = cursor.lastrowid
+    
+        # Attachments
+        files = request.files.getlist("attachments")
+        for f in files:
+            filename = f.filename
+            save_path = os.path.join(UPLOAD_EMAILS, filename)
+            f.save(save_path)
+    
+            cursor.execute("""
+                INSERT INTO email_attachments (email_id, filename, path)
+                VALUES (%s, %s, %s)
+            """, (email_id, filename, save_path))
+    
+        # Footprint
+        cursor.execute("""
+            INSERT INTO email_footprint (email_id, user, action, timestamp)
+            VALUES (%s, %s, %s, NOW())
+        """, (email_id, session["user"]["name"], "Sent email"))
+    
+        db.commit()
+    
+        return jsonify({"success": True, "message": "Email sent"})
+
+    
+    
+    @app.route("/comms/email/<int:email_id>/reply")
+    @login_required
+    def comms_email_reply(email_id):
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("SELECT * FROM emails WHERE id=%s", (email_id,))
+        e = cursor.fetchone()
+    
+        prefill = {
+            "subject": f"Re: {e['subject']}",
+            "body": f"\n\n--- Original Message ---\n{e['body_text']}"
+        }
+    
+        return jsonify({"success": True, "prefill": prefill})
+    
+    
+    @app.route("/comms/email/<int:email_id>/reply_all")
+    @login_required
+    def comms_email_reply_all(email_id):
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("SELECT * FROM emails WHERE id=%s", (email_id,))
+        e = cursor.fetchone()
+    
+        prefill = {
+            "subject": f"Re: {e['subject']}",
+            "body": f"\n\n--- Original Message ---\n{e['body_text']}"
+        }
+    
+        return jsonify({"success": True, "prefill": prefill})
+    
+    
+    @app.route("/comms/email/<int:email_id>/forward")
+    @login_required
+    def comms_email_forward(email_id):
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("SELECT * FROM emails WHERE id=%s", (email_id,))
+        e = cursor.fetchone()
+    
+        prefill = {
+            "subject": f"Fwd: {e['subject']}",
+            "body": f"\n\n--- Forwarded Message ---\n{e['body_text']}"
+        }
+    
+        return jsonify({"success": True, "prefill": prefill})
+    
+    
+    @app.route("/comms/email/<int:email_id>/archive", methods=["POST"])
+    @login_required
+    def comms_email_archive_single(email_id):
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("UPDATE emails SET archived=1 WHERE id=%s", (email_id,))
+        db.commit()
+    
+        return jsonify({"success": True, "message": "Email archived"})
+    
+    
+    ###############################################
+    # CHAT / INSTANT MESSAGING
+    ###############################################
+    
+    @app.route("/comms/chat/users")
+    @login_required
+    def comms_chat_users():
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("""
+            SELECT 
+                id,
+                name,
+                email
+            FROM users
+            WHERE business_id = %s
+              AND id != %s
+            ORDER BY name ASC
+        """, (session["user"]["business_id"], session["user"]["id"]))
+    
+        users = cursor.fetchall()
+    
+        # Return RAW LIST (not wrapped)
+        return jsonify(users)
+    @app.route("/comms/feed/list")
+    @login_required
+    def comms_feed_list():
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("""
+            SELECT 
+                f.id,
+                f.text,
+                f.created_at,
+                u.name AS user
+            FROM feed_posts f
+            JOIN users u ON u.id = f.user_id
+            WHERE f.business_id = %s
+            ORDER BY f.created_at DESC
+        """, (session["user"]["business_id"],))
+    
+        posts = cursor.fetchall()
+    
+        # Return RAW LIST (not wrapped)
+        return jsonify(posts)
+
+
+    
+    
+    @app.route("/comms/chat/conversation/<int:user_id>")
+    @login_required
+    def comms_chat_conversation(user_id):
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("""
+            SELECT 
+                c.id,
+                c.sender_id,
+                c.receiver_id,
+                c.text AS message,
+                c.sent_at,
+                u.name AS sender_name,
+                CASE WHEN c.sender_id = %s THEN 1 ELSE 0 END AS is_me
+            FROM chat_messages c
+            JOIN users u ON u.id = c.sender_id
+            WHERE c.business_id = %s
+              AND (
+                    (c.sender_id = %s AND c.receiver_id = %s)
+                 OR (c.sender_id = %s AND c.receiver_id = %s)
+              )
+            ORDER BY c.sent_at ASC
+        """, (
+            session["user"]["id"],                 # for is_me
+            session["user"]["business_id"],        # business filter
+            session["user"]["id"], user_id,        # me → them
+            user_id, session["user"]["id"]         # them → me
+        ))
+    
+        messages = cursor.fetchall()
+    
+        # Return RAW LIST (not wrapped)
+        return jsonify(messages)
+
+    
+    
+    @app.route("/comms/chat/send/<int:user_id>", methods=["POST"])
+    @login_required
+    def comms_chat_send(user_id):
+        data = request.get_json()
+        text = data.get("text")
+    
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("""
+            INSERT INTO chat_messages (business_id, sender_id, receiver_id, text, sent_at)
+            VALUES (%s, %s, %s, %s, NOW())
+        """, (
+            session["user"]["business_id"],   # ⭐ FIXED
+            session["user"]["id"],
+            user_id,
+            text
+        ))
+    
+        db.commit()
+    
+        return jsonify({"success": True, "message": "Message sent"})
+
+    
+    
+    ###############################################
+    # FEED / POSTS
+    ###############################################
+    
+    @app.route("/comms/feed")
+    @login_required
+    def comms_feed():
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("""
+            SELECT f.*, u.name AS user
+            FROM feed_posts f
+            JOIN users u ON u.id = f.user_id
+            ORDER BY f.created_at DESC
+        """)
+        posts = cursor.fetchall()
+    
+        for p in posts:
+            cursor.execute("""
+                SELECT c.*, u.name AS user
+                FROM feed_comments c
+                JOIN users u ON u.id = c.user_id
+                WHERE c.post_id=%s
+                ORDER BY c.created_at ASC
+            """, (p["id"],))
+            p["comments"] = cursor.fetchall()
+    
+        return jsonify({"success": True, "posts": posts})
+    
+    
+    @app.route("/comms/feed/post", methods=["POST"])
+    @login_required
+    def comms_feed_post():
+        data = request.get_json()
+        text = (data.get("text") or "").strip()
+    
+        if not text:
+            return jsonify({"success": False, "message": "Post cannot be empty"})
+    
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("""
+            INSERT INTO feed_posts (business_id, user_id, text, created_at)
+            VALUES (%s, %s, %s, NOW())
+        """, (
+            session["user"]["business_id"],
+            session["user"]["id"],
+            text
+        ))
+    
+        db.commit()
+    
+        # Get the new post ID
+        new_id = cursor.lastrowid
+    
+        return jsonify({
+            "success": True,
+            "message": "Posted",
+            "post_id": new_id
+        })
+
+
+    
+    
+    @app.route("/comms/feed/<int:post_id>/like", methods=["POST"])
+    @login_required
+    def comms_feed_like(post_id):
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("""
+            UPDATE feed_posts 
+            SET likes = likes + 1 
+            WHERE id=%s
+        """, (post_id,))
+    
+        db.commit()
+    
+        return jsonify({"success": True, "message": "Liked"})
+    
+    
+    @app.route("/comms/feed/<int:post_id>/comment", methods=["POST"])
+    @login_required
+    def comms_feed_comment(post_id):
+        data = request.get_json()
+        text = data.get("text")
+    
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+    
+        cursor.execute("""
+            INSERT INTO feed_comments (post_id, user_id, text, created_at)
+            VALUES (%s, %s, %s, NOW())
+        """, (post_id, session["user"]["id"], text))
+    
+        db.commit()
+    
+        return jsonify({"success": True, "message": "Comment added"})
+
 
 
 

@@ -1,0 +1,58 @@
+<!-- FIX: This CSS forces inputs to accept typing even if a parent blocks it -->
+<style>
+  #composeForm input,
+  #composeForm textarea {
+      pointer-events: auto !important;
+      user-select: text !important;
+      position: relative !important;
+      z-index: 10 !important;
+  }
+
+  /* If any overlay is blocking input, disable its pointer events */
+  .overlay, .modal-backdrop {
+      pointer-events: none !important;
+  }
+</style>
+
+
+<form id="composeForm"
+      onsubmit="event.preventDefault(); sendCompose();"
+      enctype="multipart/form-data">
+
+    <h2 style="margin-bottom:15px;">New Email</h2>
+
+    <div style="margin-bottom:10px;">
+        <label>To:</label>
+        <input type="text" name="to" style="width:100%;" required placeholder="Enter recipient email">
+    </div>
+
+    <div style="margin-bottom:10px;">
+        <label>Cc:</label>
+        <input type="text" name="cc" style="width:100%;" placeholder="Optional">
+    </div>
+
+    <div style="margin-bottom:10px;">
+        <label>Bcc:</label>
+        <input type="text" name="bcc" style="width:100%;" placeholder="Optional">
+    </div>
+
+    <div style="margin-bottom:10px;">
+        <label>Subject:</label>
+        <input type="text" id="subject" name="subject" style="width:100%;" required placeholder="Email subject">
+    </div>
+
+    <div style="margin-bottom:10px;">
+        <label>Message:</label>
+        <textarea id="body" name="body" rows="6" style="width:100%;" required placeholder="Write your message here..."></textarea>
+    </div>
+
+    <div style="margin-bottom:15px;">
+        <label>Attachments:</label>
+        <input type="file" name="attachments" multiple>
+    </div>
+
+    <button type="submit" class="btn-primary">
+        Send Email
+    </button>
+
+</form>

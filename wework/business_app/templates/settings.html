@@ -4,7 +4,6 @@
 {% block content %}
 
 <style>
-    /* Page Title */
     .settings-title {
         font-size: 28px;
         font-weight: 700;
@@ -13,7 +12,6 @@
         letter-spacing: 0.5px;
     }
 
-    /* Section Card */
     .settings-section {
         background: #ffffff;
         padding: 28px;
@@ -33,11 +31,10 @@
         font-size: 20px;
         font-weight: 600;
         color: #1a2b49;
-        border-left: 4px solid #c8a24a; /* Gold accent */
+        border-left: 4px solid #c8a24a;
         padding-left: 12px;
     }
 
-    /* Labels */
     label {
         font-weight: 600;
         margin-top: 10px;
@@ -45,7 +42,6 @@
         color: #1a2b49;
     }
 
-    /* Inputs */
     input, select {
         width: 100%;
         padding: 10px;
@@ -61,7 +57,6 @@
         box-shadow: 0 0 4px rgba(200,162,74,0.4);
     }
 
-    /* Buttons */
     .btn-save {
         background: #1a2b49;
         color: white;
@@ -76,7 +71,56 @@
     .btn-save:hover {
         background: #152238;
     }
+
+    /* Top-left toast */
+    #toastTL {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        z-index: 99999;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .toast-msg {
+        background: #1a2b49;
+        color: white;
+        padding: 12px 18px;
+        border-radius: 8px;
+        font-weight: 600;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        animation: fadeIn 0.3s ease, fadeOut 0.3s ease 3s forwards;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeOut {
+        to { opacity: 0; transform: translateY(-10px); }
+    }
 </style>
+
+<div id="toastTL"></div>
+
+<script>
+function showToastTL(message) {
+    const box = document.getElementById("toastTL");
+    const t = document.createElement("div");
+    t.className = "toast-msg";
+    t.innerText = message;
+    box.appendChild(t);
+    setTimeout(() => t.remove(), 3500);
+}
+
+// Show toast after redirect
+const params = new URLSearchParams(window.location.search);
+if (params.get("perm_saved") === "1") {
+    showToastTL("Permissions updated successfully!");
+}
+</script>
 
 <h2 class="settings-title">Settings & Configuration</h2>
 
@@ -84,7 +128,8 @@
 <div class="settings-section">
     <h3>User Permissions</h3>
 
-    <form method="POST" action="/settings/permissions">
+    <form method="POST" id="permForm">
+
         <label>Select User</label>
         <select name="user_id">
             {% for u in users %}
@@ -92,95 +137,82 @@
             {% endfor %}
         </select>
 
+        <!-- SYSTEM / NAVBAR PERMISSIONS -->
         <label>Dashboard Access</label>
-        <select name="can_view_dashboard">
-            <option value="1">Allow</option>
-            <option value="0">Deny</option>
-        </select>
+        <select name="can_view_dashboard"><option value="1">Allow</option><option value="0">Deny</option></select>
 
         <label>Products Access</label>
-        <select name="can_view_products">
-            <option value="1">Allow</option>
-            <option value="0">Deny</option>
-        </select>
+        <select name="can_view_products"><option value="1">Allow</option><option value="0">Deny</option></select>
 
         <label>Customers Access</label>
-        <select name="can_view_customers">
-            <option value="1">Allow</option>
-            <option value="0">Deny</option>
-        </select>
+        <select name="can_view_customers"><option value="1">Allow</option><option value="0">Deny</option></select>
 
         <label>Sales Access</label>
-        <select name="can_view_sales">
-            <option value="1">Allow</option>
-            <option value="0">Deny</option>
-        </select>
+        <select name="can_view_sales"><option value="1">Allow</option><option value="0">Deny</option></select>
+
+        <label>Returns Access</label>
+        <select name="can_view_returns"><option value="1">Allow</option><option value="0">Deny</option></select>
+
+        <label>Human (HR) Access</label>
+        <select name="can_view_human"><option value="1">Allow</option><option value="0">Deny</option></select>
+
+        <label>Tasks Access</label>
+        <select name="can_view_tasks"><option value="1">Allow</option><option value="0">Deny</option></select>
+
+        <label>Comms Access</label>
+        <select name="can_view_comms"><option value="1">Allow</option><option value="0">Deny</option></select>
 
         <label>POS Access</label>
-        <select name="can_view_pos">
-            <option value="1">Allow</option>
-            <option value="0">Deny</option>
-        </select>
+        <select name="can_view_pos"><option value="1">Allow</option><option value="0">Deny</option></select>
 
         <label>Finances Access</label>
-        <select name="can_view_finances">
-            <option value="1">Allow</option>
-            <option value="0">Deny</option>
-        </select>
+        <select name="can_view_finances"><option value="1">Allow</option><option value="0">Deny</option></select>
 
         <label>Reports Access</label>
-        <select name="can_view_reports">
-            <option value="1">Allow</option>
-            <option value="0">Deny</option>
-        </select>
+        <select name="can_view_reports"><option value="1">Allow</option><option value="0">Deny</option></select>
 
         <label>Visual Dashboard Access</label>
-        <select name="can_view_visuals">
-            <option value="1">Allow</option>
-            <option value="0">Deny</option>
-        </select>
+        <select name="can_view_visual_dashboard"><option value="1">Allow</option><option value="0">Deny</option></select>
 
         <label>Stores Access</label>
-        <select name="can_view_stores">
-            <option value="1">Allow</option>
-            <option value="0">Deny</option>
-        </select>
+        <select name="can_view_stores"><option value="1">Allow</option><option value="0">Deny</option></select>
 
         <label>Stock In Access</label>
-        <select name="can_view_stock_in">
-            <option value="1">Allow</option>
-            <option value="0">Deny</option>
-        </select>
+        <select name="can_view_stock_in"><option value="1">Allow</option><option value="0">Deny</option></select>
 
         <label>Stock Transfer Access</label>
-        <select name="can_view_stock_transfer">
-            <option value="1">Allow</option>
-            <option value="0">Deny</option>
-        </select>
+        <select name="can_view_transfer"><option value="1">Allow</option><option value="0">Deny</option></select>
 
         <label>Movements Access</label>
-        <select name="can_view_movements">
-            <option value="1">Allow</option>
-            <option value="0">Deny</option>
-        </select>
+        <select name="can_view_movements"><option value="1">Allow</option><option value="0">Deny</option></select>
 
         <label>Gallery Access</label>
-        <select name="can_view_gallery">
-            <option value="1">Allow</option>
-            <option value="0">Deny</option>
-        </select>
+        <select name="can_view_gallery"><option value="1">Allow</option><option value="0">Deny</option></select>
 
         <label>Settings Access</label>
-        <select name="can_view_settings">
-            <option value="1">Allow</option>
-            <option value="0">Deny</option>
-        </select>
+        <select name="can_view_settings"><option value="1">Allow</option><option value="0">Deny</option></select>
 
         <label>Profile Access</label>
-        <select name="can_view_profile">
-            <option value="1">Allow</option>
-            <option value="0">Deny</option>
-        </select>
+        <select name="can_view_profile"><option value="1">Allow</option><option value="0">Deny</option></select>
+
+        <!-- HR PERMISSIONS -->
+        <label>Leave Access</label>
+        <select name="can_view_leave"><option value="1">Allow</option><option value="0">Deny</option></select>
+
+        <label>Overtime Access</label>
+        <select name="can_view_overtime"><option value="1">Allow</option><option value="0">Deny</option></select>
+
+        <label>Vacancies Access</label>
+        <select name="can_view_vacancies"><option value="1">Allow</option><option value="0">Deny</option></select>
+
+        <label>Approvals Access</label>
+        <select name="can_view_approvals"><option value="1">Allow</option><option value="0">Deny</option></select>
+
+        <label>Payroll Access</label>
+        <select name="can_view_payroll"><option value="1">Allow</option><option value="0">Deny</option></select>
+
+        <label>Payslips Access</label>
+        <select name="can_view_payslips"><option value="1">Allow</option><option value="0">Deny</option></select>
 
         <button class="btn-save">Save Permissions</button>
     </form>
@@ -230,5 +262,13 @@
         <button class="btn-save">Save Configuration</button>
     </form>
 </div>
+
+<script>
+/* Fix 404 by dynamically setting correct POST URL */
+document.getElementById("permForm").addEventListener("submit", function(e) {
+    const userId = document.querySelector("select[name='user_id']").value;
+    this.action = "/settings/permissions/" + userId;
+});
+</script>
 
 {% endblock %}

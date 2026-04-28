@@ -53,6 +53,93 @@
     color: #d4af37;
 }
 
+.modal {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.55);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 999;
+    pointer-events: none;   /* ⭐ overlay does NOT block input */
+}
+
+.modal-content {
+    background: #fff;
+    width: 70%;
+    max-height: 80vh;
+    overflow-y: auto;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.35);
+    pointer-events: auto;   /* ⭐ content CAN receive clicks */
+}
+.chip-input:empty:before {
+    content: attr(data-placeholder);
+    color: #9ca3af;
+    pointer-events: none;
+}
+/* CHIP INPUT FIXES */
+.chip-input {
+    min-height: 40px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    cursor: text;
+    pointer-events: auto !important;
+}
+
+.chip-input.empty:before {
+    content: attr(data-placeholder);
+    color: #9ca3af;
+    pointer-events: none;
+}
+
+.chip {
+    background: #e5e7eb;
+    border-radius: 20px;
+    padding: 4px 10px;
+    margin: 2px;
+    display: flex;
+    align-items: center;
+    font-size: 13px;
+}
+
+.chip .remove-chip {
+    cursor: pointer;
+    font-weight: bold;
+    padding-left: 4px;
+}
+
+/* SUGGEST BOX */
+.suggest-box {
+    position: absolute;
+    background: white;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    width: 60%;
+    max-height: 150px;
+    overflow-y: auto;
+    z-index: 2000;
+    display: none;
+}
+
+.suggest-item {
+    padding: 6px;
+    cursor: pointer;
+}
+.suggest-item:hover {
+    background: #f3f4f6;
+}
+
+/* FIX INPUT BLOCKING */
+input, textarea {
+    pointer-events: auto !important;
+}
+
 
 * {
     box-sizing: border-box;

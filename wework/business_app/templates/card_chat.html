@@ -1,0 +1,27 @@
+<div class="chat-card">
+
+    <h2 style="margin-bottom:10px;">Chat with {{ other_user.name }}</h2>
+
+    <div style="max-height:55vh; overflow-y:auto; border:1px solid #e5e7eb; padding:10px; border-radius:6px;">
+        {% for msg in messages %}
+            <div style="margin-bottom:10px; text-align:{{ 'right' if msg.is_me else 'left' }};">
+                <div style="
+                    display:inline-block;
+                    padding:8px 12px;
+                    border-radius:8px;
+                    background:{{ '#d4af37' if msg.is_me else '#f3f4f6' }};
+                    color:{{ '#000' if msg.is_me else '#111' }};
+                ">
+                    {{ msg.message }}
+                </div>
+                <div style="font-size:11px; color:#6b7280;">{{ msg.sent_at }}</div>
+            </div>
+        {% endfor %}
+    </div>
+
+    <div style="margin-top:10px; display:flex; gap:10px;">
+        <input id="chatInput" class="form-control" placeholder="Type a message...">
+        <button class="btn-primary" onclick="sendChatMessageTo({{ other_user.id }})">Send</button>
+    </div>
+
+</div>

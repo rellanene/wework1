@@ -1,0 +1,627 @@
+{% extends "base.html" %}
+{% block title %}Comms{% endblock %}
+{% block content %}
+
+<style>
+/* Layout */
+.comms-container {
+    display: grid;
+    grid-template-columns: 2fr 2fr 2fr;
+    gap: 15px;
+}
+
+/* Shared */
+.card {
+    background: #ffffff;
+    border-radius: 6px;
+    padding: 12px 15px;
+    box-shadow: 0 0 6px rgba(0,0,0,0.08);
+}
+
+/* Buttons */
+.btn-primary {
+    background: #d4af37;
+    color: #000;
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.btn-primary:hover { background: #c19b2e; }
+
+.btn-secondary {
+    background: #1f2937;
+    color: #fff;
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.btn-secondary:hover { background: #111827; }
+
+.btn-small {
+    padding: 4px 8px;
+    font-size: 12px;
+    border-radius: 4px;
+}
+
+/* Email pane */
+.email-list {
+    max-height: 60vh;
+    overflow-y: auto;
+}
+.email-item {
+    padding: 6px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+}
+.email-item:hover {
+    background: #f5f5f5;
+}
+.email-item.selected {
+    background: #e5e7eb;
+}
+.email-meta {
+    font-size: 11px;
+    color: #6b7280;
+}
+
+/* Email detail */
+.email-detail {
+    max-height: 60vh;
+    overflow-y: auto;
+    border-top: 1px solid #e5e7eb;
+    margin-top: 8px;
+    padding-top: 8px;
+}
+.email-footprint {
+    font-size: 11px;
+    color: #6b7280;
+    border-top: 1px dashed #d1d5db;
+    margin-top: 8px;
+    padding-top: 4px;
+}
+
+/* Chat */
+.chat-list {
+    max-height: 20vh;
+    overflow-y: auto;
+    border-bottom: 1px solid #e5e7eb;
+    margin-bottom: 8px;
+}
+.chat-user {
+    padding: 5px;
+    cursor: pointer;
+}
+.chat-user:hover {
+    background: #f3f4f6;
+}
+.chat-user.active {
+    background: #e5e7eb;
+}
+.chat-window {
+    max-height: 40vh;
+    overflow-y: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    padding: 6px;
+    background: #f9fafb;
+}
+.chat-message {
+    margin-bottom: 6px;
+    font-size: 13px;
+}
+.chat-message.me {
+    text-align: right;
+}
+.chat-meta {
+    font-size: 10px;
+    color: #9ca3af;
+}
+
+/* Feed */
+.feed-list {
+    max-height: 60vh;
+    overflow-y: auto;
+}
+.feed-item {
+    border-bottom: 1px solid #e5e7eb;
+    padding: 6px 0;
+}
+.feed-meta {
+    font-size: 11px;
+    color: #6b7280;
+}
+.feed-actions button {
+    margin-right: 4px;
+}
+
+/* Modals */
+.modal {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.55);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 999;
+}
+.modal-content {
+    background: #fff;
+    width: 70%;
+    max-height: 80vh;
+    overflow-y: auto;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.35);
+}
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.modal-header h3 {
+    margin: 0;
+}
+</style>
+
+<h1 class="page-title">Communications</h1>
+
+<div class="comms-container">
+
+    <!-- EMAIL ENGINE -->
+    <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h3>Email</h3>
+            <button class="btn-primary btn-small" onclick="openComposeModal()">New Email</button>
+        </div>
+
+        <input type="text" id="emailSearch" class="form-control" placeholder="Search emails..." onkeyup="searchEmails()">
+
+        <div style="margin-top:6px; margin-bottom:6px;">
+            <button class="btn-secondary btn-small" onclick="loadInbox()">Inbox</button>
+            <button class="btn-secondary btn-small" onclick="loadSent()">Sent</button>
+            <button class="btn-secondary btn-small" onclick="loadArchivedEmails()">Archive</button>
+        </div>
+
+        <div class="email-list" id="emailList"></div>
+
+        <div class="email-detail" id="emailDetail">
+            <em>Select an email to view details.</em>
+        </div>
+    </div>
+
+    <!-- CHAT / INSTANT MESSAGING -->
+    <div class="card">
+        <h3>Chats</h3>
+
+        <div class="chat-list" id="chatUserList">
+            <!-- Filled by JS: list of users/conversations -->
+        </div>
+
+        <div class="chat-window" id="chatWindow">
+            <em>Select a user to start chatting.</em>
+        </div>
+
+        <div style="margin-top:6px;">
+            <textarea id="chatMessage" class="form-control" placeholder="Type a message..."></textarea>
+            <button class="btn-primary btn-small" style="margin-top:4px;" onclick="sendChatMessage()">Send</button>
+        </div>
+    </div>
+
+    <!-- FEED / POSTS -->
+    <div class="card">
+        <h3>Feed</h3>
+
+        <textarea id="feedPostText" class="form-control" placeholder="Share an update..."></textarea>
+        <button class="btn-primary btn-small" style="margin-top:4px;" onclick="createFeedPost()">Post</button>
+
+        <div class="feed-list" id="feedList" style="margin-top:8px;">
+            <!-- Filled by JS -->
+        </div>
+    </div>
+</div>
+
+<!-- COMPOSE EMAIL MODAL -->
+<div id="composeModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>New Email</h3>
+            <button class="btn-secondary btn-small" onclick="closeComposeModal()">X</button>
+        </div>
+
+        <label>To</label>
+        <select id="email_to" class="form-control" multiple>
+            {% for u in users %}
+                <option value="{{ u.id }}">{{ u.name }} ({{ u.email }})</option>
+            {% endfor %}
+        </select>
+
+        <label>Cc</label>
+        <select id="email_cc" class="form-control" multiple>
+            {% for u in users %}
+                <option value="{{ u.id }}">{{ u.name }} ({{ u.email }})</option>
+            {% endfor %}
+        </select>
+
+        <label>Bcc</label>
+        <select id="email_bcc" class="form-control" multiple>
+            {% for u in users %}
+                <option value="{{ u.id }}">{{ u.name }} ({{ u.email }})</option>
+            {% endfor %}
+        </select>
+
+        <label>Subject</label>
+        <input type="text" id="email_subject" class="form-control">
+
+        <label>Message</label>
+        <textarea id="email_body" class="form-control" rows="6"></textarea>
+
+        <label>Attachments</label>
+        <input type="file" id="email_attachments" multiple>
+
+        <div style="margin-top:8px;">
+            <button class="btn-primary" onclick="sendEmail()">Send</button>
+            <button class="btn-secondary" onclick="closeComposeModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// POPUP (reuse your global popup)
+function showPopup(message, type="success") {
+    const popup = document.getElementById("app-popup");
+    const msg = document.getElementById("popup-message");
+    if (!popup || !msg) return;
+    msg.innerText = message;
+    popup.style.borderLeftColor = type === "success" ? "#28a745" : "#dc3545";
+    popup.style.display = "block";
+    setTimeout(() => popup.style.display = "none", 3500);
+}
+
+/* ============================
+   EMAIL ENGINE
+============================ */
+let currentMailbox = "inbox";
+let currentEmailId = null;
+
+function loadInbox() {
+    currentMailbox = "inbox";
+    fetch("/comms/email/inbox")
+        .then(r => r.json())
+        .then(data => renderEmailList(data.emails || []));
+}
+
+function loadSent() {
+    currentMailbox = "sent";
+    fetch("/comms/email/sent")
+        .then(r => r.json())
+        .then(data => renderEmailList(data.emails || []));
+}
+
+function loadArchivedEmails() {
+    currentMailbox = "archive";
+    fetch("/comms/email/archive")
+        .then(r => r.json())
+        .then(data => renderEmailList(data.emails || []));
+}
+
+function searchEmails() {
+    const q = document.getElementById("emailSearch").value;
+    fetch(`/comms/email/search?q=${encodeURIComponent(q)}&box=${currentMailbox}`)
+        .then(r => r.json())
+        .then(data => renderEmailList(data.emails || []));
+}
+
+function renderEmailList(emails) {
+    const list = document.getElementById("emailList");
+    list.innerHTML = "";
+    emails.forEach(e => {
+        const div = document.createElement("div");
+        div.className = "email-item";
+        div.onclick = () => openEmail(e.id);
+        div.innerHTML = `
+            <div><strong>${e.subject || "(no subject)"}</strong></div>
+            <div class="email-meta">${e.from_name} → ${e.to_summary}</div>
+            <div class="email-meta">${e.sent_at}</div>
+        `;
+        list.appendChild(div);
+    });
+    document.getElementById("emailDetail").innerHTML = "<em>Select an email to view details.</em>";
+}
+
+function openEmail(id) {
+    currentEmailId = id;
+    fetch(`/comms/email/${id}`)
+        .then(r => r.json())
+        .then(e => {
+            if (!e.success) return showPopup(e.message, "error");
+            const d = e.email;
+            const detail = document.getElementById("emailDetail");
+            let attachHtml = "";
+            (d.attachments || []).forEach(a => {
+                attachHtml += `<li><a href="/${a.path}" target="_blank">${a.filename}</a></li>`;
+            });
+            let footprintHtml = "";
+            (d.footprint || []).forEach(f => {
+                footprintHtml += `<div>${f.timestamp} — ${f.user}: ${f.action}</div>`;
+            });
+
+            detail.innerHTML = `
+                <div>
+                    <div><strong>From:</strong> ${d.from_name} &lt;${d.from_email}&gt;</div>
+                    <div><strong>To:</strong> ${d.to_full}</div>
+                    <div><strong>Cc:</strong> ${d.cc_full || "-"}</div>
+                    <div><strong>Subject:</strong> ${d.subject}</div>
+                    <div class="email-meta">${d.sent_at}</div>
+                </div>
+                <hr>
+                <div>${d.body_html || d.body_text || ""}</div>
+                <hr>
+                <div>
+                    <strong>Attachments</strong>
+                    <ul>${attachHtml}</ul>
+                </div>
+                <div style="margin-top:6px;">
+                    <button class="btn-primary btn-small" onclick="replyEmail()">Reply</button>
+                    <button class="btn-primary btn-small" onclick="replyAllEmail()">Reply All</button>
+                    <button class="btn-secondary btn-small" onclick="forwardEmail()">Forward</button>
+                    <button class="btn-secondary btn-small" onclick="archiveEmail()">Archive</button>
+                </div>
+                <div class="email-footprint">
+                    <strong>Footprint / Activity</strong>
+                    ${footprintHtml || "<div>No activity yet.</div>"}
+                </div>
+            `;
+        });
+}
+
+function openComposeModal(prefill) {
+    document.getElementById("composeModal").style.display = "flex";
+    document.getElementById("email_subject").value = prefill?.subject || "";
+    document.getElementById("email_body").value = prefill?.body || "";
+    // To/Cc/Bcc prefill left to backend/JS if needed
+}
+
+function closeComposeModal() {
+    document.getElementById("composeModal").style.display = "none";
+}
+
+function sendEmail() {
+    const to = Array.from(document.getElementById("email_to").selectedOptions).map(o => o.value);
+    const cc = Array.from(document.getElementById("email_cc").selectedOptions).map(o => o.value);
+    const bcc = Array.from(document.getElementById("email_bcc").selectedOptions).map(o => o.value);
+    const subject = document.getElementById("email_subject").value;
+    const body = document.getElementById("email_body").value;
+    const files = document.getElementById("email_attachments").files;
+
+    const formData = new FormData();
+    formData.append("subject", subject);
+    formData.append("body", body);
+    formData.append("to", JSON.stringify(to));
+    formData.append("cc", JSON.stringify(cc));
+    formData.append("bcc", JSON.stringify(bcc));
+    for (let i = 0; i < files.length; i++) {
+        formData.append("attachments", files[i]);
+    }
+
+    fetch("/comms/email/send", {
+        method: "POST",
+        body: formData
+    })
+    .then(r => r.json())
+    .then(data => {
+        showPopup(data.message, data.success ? "success" : "error");
+        if (data.success) {
+            closeComposeModal();
+            loadInbox();
+        }
+    });
+}
+
+function replyEmail() {
+    if (!currentEmailId) return;
+    fetch(`/comms/email/${currentEmailId}/reply`)
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) return showPopup(data.message, "error");
+            openComposeModal(data.prefill);
+        });
+}
+
+function replyAllEmail() {
+    if (!currentEmailId) return;
+    fetch(`/comms/email/${currentEmailId}/reply_all`)
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) return showPopup(data.message, "error");
+            openComposeModal(data.prefill);
+        });
+}
+
+function forwardEmail() {
+    if (!currentEmailId) return;
+    fetch(`/comms/email/${currentEmailId}/forward`)
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) return showPopup(data.message, "error");
+            openComposeModal(data.prefill);
+        });
+}
+
+function archiveEmail() {
+    if (!currentEmailId) return;
+    fetch(`/comms/email/${currentEmailId}/archive`, { method: "POST" })
+        .then(r => r.json())
+        .then(data => {
+            showPopup(data.message, data.success ? "success" : "error");
+            if (data.success) loadInbox();
+        });
+}
+
+/* ============================
+   CHAT / INSTANT MESSAGING
+============================ */
+let currentChatUserId = null;
+
+function loadChatUsers() {
+    fetch("/comms/chat/users")
+        .then(r => r.json())
+        .then(data => {
+            const list = document.getElementById("chatUserList");
+            list.innerHTML = "";
+            (data.users || []).forEach(u => {
+                const div = document.createElement("div");
+                div.className = "chat-user";
+                div.onclick = () => openChat(u.id);
+                div.innerHTML = `${u.name}`;
+                list.appendChild(div);
+            });
+        });
+}
+
+function openChat(userId) {
+    currentChatUserId = userId;
+    fetch(`/comms/chat/conversation/${userId}`)
+        .then(r => r.json())
+        .then(data => {
+            const win = document.getElementById("chatWindow");
+            win.innerHTML = "";
+            (data.messages || []).forEach(m => {
+                const div = document.createElement("div");
+                div.className = "chat-message " + (m.is_me ? "me" : "");
+                div.innerHTML = `
+                    <div>${m.text}</div>
+                    <div class="chat-meta">${m.sender_name} • ${m.sent_at}</div>
+                `;
+                win.appendChild(div);
+            });
+            win.scrollTop = win.scrollHeight;
+        });
+}
+
+function sendChatMessage() {
+    if (!currentChatUserId) {
+        return showPopup("Select a user to chat with.", "error");
+    }
+    const text = document.getElementById("chatMessage").value.trim();
+    if (!text) return;
+    fetch(`/comms/chat/send/${currentChatUserId}`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({text})
+    })
+    .then(r => r.json())
+    .then(data => {
+        showPopup(data.message, data.success ? "success" : "error");
+        if (data.success) {
+            document.getElementById("chatMessage").value = "";
+            openChat(currentChatUserId);
+        }
+    });
+}
+
+/* ============================
+   FEED / POSTS
+============================ */
+function loadFeed() {
+    fetch("/comms/feed")
+        .then(r => r.json())
+        .then(data => {
+            const list = document.getElementById("feedList");
+            list.innerHTML = "";
+            (data.posts || []).forEach(p => {
+                let commentsHtml = "";
+                (p.comments || []).forEach(c => {
+                    commentsHtml += `
+                        <div style="margin-left:10px; margin-top:2px;">
+                            <strong>${c.user}</strong>: ${c.text}
+                            <div class="feed-meta">${c.created_at}</div>
+                        </div>
+                    `;
+                });
+                list.innerHTML += `
+                    <div class="feed-item">
+                        <div><strong>${p.user}</strong></div>
+                        <div>${p.text}</div>
+                        <div class="feed-meta">${p.created_at}</div>
+                        <div class="feed-actions">
+                            <button class="btn-small btn-primary" onclick="likePost(${p.id})">Like (${p.likes})</button>
+                            <button class="btn-small btn-secondary" onclick="toggleCommentBox(${p.id})">Comment</button>
+                        </div>
+                        <div id="feedComments_${p.id}">
+                            ${commentsHtml}
+                        </div>
+                        <div id="feedCommentBox_${p.id}" style="display:none; margin-top:4px;">
+                            <textarea id="feedCommentText_${p.id}" class="form-control" placeholder="Write a comment..."></textarea>
+                            <button class="btn-primary btn-small" style="margin-top:2px;" onclick="addCommentToPost(${p.id})">Post Comment</button>
+                        </div>
+                    </div>
+                `;
+            });
+        });
+}
+
+function createFeedPost() {
+    const text = document.getElementById("feedPostText").value.trim();
+    if (!text) return;
+    fetch("/comms/feed/post", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({text})
+    })
+    .then(r => r.json())
+    .then(data => {
+        showPopup(data.message, data.success ? "success" : "error");
+        if (data.success) {
+            document.getElementById("feedPostText").value = "";
+            loadFeed();
+        }
+    });
+}
+
+function likePost(postId) {
+    fetch(`/comms/feed/${postId}/like`, { method: "POST" })
+        .then(r => r.json())
+        .then(data => {
+            showPopup(data.message, data.success ? "success" : "error");
+            if (data.success) loadFeed();
+        });
+}
+
+function toggleCommentBox(postId) {
+    const box = document.getElementById(`feedCommentBox_${postId}`);
+    box.style.display = box.style.display === "none" ? "block" : "none";
+}
+
+function addCommentToPost(postId) {
+    const textEl = document.getElementById(`feedCommentText_${postId}`);
+    const text = textEl.value.trim();
+    if (!text) return;
+    fetch(`/comms/feed/${postId}/comment`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({text})
+    })
+    .then(r => r.json())
+    .then(data => {
+        showPopup(data.message, data.success ? "success" : "error");
+        if (data.success) {
+            textEl.value = "";
+            loadFeed();
+        }
+    });
+}
+
+/* ============================
+   INIT
+============================ */
+loadInbox();
+loadChatUsers();
+loadFeed();
+</script>
+
+{% endblock %}
